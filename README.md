@@ -8,6 +8,10 @@ Trayce can show static usage from local config or refresh live JSON from each AP
 
 [Download latest build](https://github.com/Geijoh/Trayce/releases/latest) - [Privacy policy](PRIVACY.md)
 
+## Creation Note
+
+Trayce was created with assistance from Claude Code, OpenAI Codex, and Claude Design. Project direction, review, and release decisions remain human-owned.
+
 ## System Requirements
 
 Runtime:
