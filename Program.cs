@@ -169,7 +169,7 @@ internal sealed class TrayceContext : ApplicationContext
                 Toaster.Show(null, enable ? "Trayce will start with Windows" : "Removed from Windows startup");
             }, Checked: StartupStore.IsEnabled()),
             TrayMenu.Item.Sep,
-            new("Quit Trayce", "power", BeginQuit, Color: UiPalette.Crit)
+            new("Quit Trayce", "power", Quit, Color: UiPalette.Crit)
         };
 
         new TrayMenu(items).ShowAt(Cursor.Position);
@@ -202,37 +202,6 @@ internal sealed class TrayceContext : ApplicationContext
     internal void Quit()
     {
         ExitThread();
-    }
-
-    /// <summary>Remove every tray icon and show the prototype's "Trayce has quit" overlay.</summary>
-    internal void BeginQuit()
-    {
-        timer.Stop();
-        details.Close();
-        foreach (var tray in trays.Values) tray.Dispose();
-        trays.Clear();
-
-        var quit = new QuitForm(Relaunch);
-        quit.FormClosed += (_, _) => Quit();
-        quit.Show();
-        quit.Activate();
-    }
-
-    private void Relaunch()
-    {
-        try
-        {
-            // Wait briefly so this instance releases the single-instance mutex before the new one starts.
-            Process.Start(new ProcessStartInfo("cmd.exe", $"/c timeout /t 1 /nobreak >nul & \"{Application.ExecutablePath}\"")
-            {
-                CreateNoWindow = true,
-                UseShellExecute = false
-            });
-        }
-        catch
-        {
-            // ponytail: if relaunch can't spawn, quitting is still the right outcome.
-        }
     }
 
     protected override void ExitThreadCore()
@@ -1408,7 +1377,6 @@ internal static class PreviewRenderer
         Capture(Path.Combine(dir, "dialog-validation.png"), new ValidationForm(new[] { "API name can’t be empty.", "The limit for “Daily” must be greater than zero." }));
         Capture(Path.Combine(dir, "dialog-logo.png"), new LogoPickerForm(new ApiConfig { Id = "anthropic", DisplayName = "Anthropic", LogoText = "A", BrandColor = "#D97757" }));
         Capture(Path.Combine(dir, "dialog-about.png"), new AboutForm());
-        Capture(Path.Combine(dir, "overlay-quit.png"), new QuitForm(() => { }));
         Capture(Path.Combine(dir, "toast.png"), new ToastForm("Settings saved"));
     }
 
