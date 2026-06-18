@@ -1,6 +1,10 @@
 Preset SVG icons and PNG fallbacks in this directory are derived from @lobehub/icons 5.10.0.
 Source: https://github.com/lobehub/lobe-icons
 
+The GitHub SVG icon and PNG fallback are derived from Simple Icons.
+Source: https://github.com/simple-icons/simple-icons
+License: CC0-1.0
+
 MIT License
 
 Copyright (c) 2023 LobeHub

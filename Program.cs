@@ -1661,6 +1661,7 @@ internal static class ConfigStore
                     Id = "github",
                     DisplayName = "GitHub",
                     Provider = "REST API",
+                    LogoPath = PresetIcons.GitHub,
                     LogoText = "GH",
                     BrandColor = "#1F6FEB",
                     ApiKey = "",

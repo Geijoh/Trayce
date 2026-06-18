@@ -316,6 +316,7 @@ internal static class PresetIcons
 {
     public const string Anthropic = "assets/presets/anthropic.svg";
     public const string OpenAI = "assets/presets/openai.svg";
+    public const string GitHub = "assets/presets/github.svg";
     public const string GoogleGemini = "assets/presets/google-gemini.svg";
     public const string MistralAI = "assets/presets/mistral-ai.svg";
     public const string XAIGrok = "assets/presets/xai-grok.svg";
@@ -337,6 +338,7 @@ internal static class PresetIcons
     {
         "anthropic" => Anthropic,
         "openai" => OpenAI,
+        "github" => GitHub,
         "googlegemini" => GoogleGemini,
         "mistralai" => MistralAI,
         "xaigrok" => XAIGrok,
