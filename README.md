@@ -128,6 +128,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\package.ps1
 Output:
 
 ```text
+dist\Trayce-win-x64\
 dist\Trayce-win-x64.zip
 ```
 
