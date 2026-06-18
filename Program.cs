@@ -2549,6 +2549,11 @@ internal static class SelfTest
         Check(!closeProbe.ShouldCloseForOutsideClick(new Point(120, 120), MouseButtons.Left), "inside click stays open");
         Check(closeProbe.ShouldCloseForOutsideClick(new Point(10, 10), MouseButtons.Left), "outside click closes");
 
+        var inferred = PresetIconCatalog.Find("Claude proxy", "https://api.anthropic.com/v1/messages");
+        Check(inferred.HasValue && inferred.Value.IconPath == PresetIcons.Anthropic && inferred.Value.BrandColor == "#D97757", "preset icon inference");
+        var azure = PresetIconCatalog.Find("OpenAI usage", "https://trayce.openai.azure.com/openai/deployments/gpt-4o");
+        Check(azure.HasValue && azure.Value.IconPath == PresetIcons.AzureOpenAI, "preset icon azure host");
+
         using var controller = new DetailsPopupController();
         var first = new DetailsForm(api, windowed, stale: false, previewMode: true);
         controller.Show(first);

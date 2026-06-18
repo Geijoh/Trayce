@@ -328,6 +328,69 @@ internal sealed class ApiListItem : Control
     }
 }
 
+internal readonly record struct PresetIconMatch(string IconPath, string BrandColor, string Initials, string[] Names, string[] Hosts);
+
+internal static class PresetIconCatalog
+{
+    private static readonly PresetIconMatch[] Entries =
+    {
+        new(PresetIcons.Anthropic, "#D97757", "A", new[] { "anthropic", "claude" }, new[] { "anthropic.com" }),
+        new(PresetIcons.AzureOpenAI, "#0078D4", "Az", new[] { "azure openai", "azure ai" }, new[] { "openai.azure.com", "ai.azure.com" }),
+        new(PresetIcons.OpenAI, "#10A37F", "OAI", new[] { "openai", "chatgpt" }, new[] { "openai.com" }),
+        new(PresetIcons.GoogleGemini, "#1A73E8", "G", new[] { "google gemini", "gemini", "google ai studio" }, new[] { "generativelanguage.googleapis.com", "aistudio.google.com", "ai.google.dev" }),
+        new(PresetIcons.MistralAI, "#FA520F", "M", new[] { "mistral", "mistral ai" }, new[] { "mistral.ai" }),
+        new(PresetIcons.XAIGrok, "#111111", "xAI", new[] { "xai", "x ai", "grok" }, new[] { "x.ai", "grok.com" }),
+        new(PresetIcons.Perplexity, "#20808D", "P", new[] { "perplexity", "sonar" }, new[] { "perplexity.ai" }),
+        new(PresetIcons.DeepSeek, "#4D6BFE", "DS", new[] { "deepseek", "deep seek" }, new[] { "deepseek.com" }),
+        new(PresetIcons.Cohere, "#39594D", "Co", new[] { "cohere", "command" }, new[] { "cohere.ai" }),
+        new(PresetIcons.Groq, "#F55036", "Gq", new[] { "groq" }, new[] { "groq.com" }),
+        new(PresetIcons.TogetherAI, "#0F6FFF", "T", new[] { "together", "together ai" }, new[] { "together.xyz", "together.ai" }),
+        new(PresetIcons.OpenRouter, "#6566F1", "OR", new[] { "openrouter", "open router" }, new[] { "openrouter.ai" }),
+        new(PresetIcons.HuggingFace, "#FF9D00", "HF", new[] { "hugging face", "huggingface" }, new[] { "huggingface.co" }),
+        new(PresetIcons.Replicate, "#1A1A1A", "R", new[] { "replicate" }, new[] { "replicate.com" }),
+        new(PresetIcons.FireworksAI, "#5019C5", "Fw", new[] { "fireworks", "fireworks ai" }, new[] { "fireworks.ai" }),
+        new(PresetIcons.AWSBedrock, "#FF9900", "AWS", new[] { "aws bedrock", "bedrock", "amazon bedrock", "aws" }, new[] { "bedrock.amazonaws.com" }),
+        new(PresetIcons.ElevenLabs, "#0B0B0B", "11", new[] { "elevenlabs", "eleven labs" }, new[] { "elevenlabs.io" }),
+        new(PresetIcons.StabilityAI, "#A21CAF", "St", new[] { "stability", "stability ai" }, new[] { "stability.ai" }),
+        new(PresetIcons.GitHub, "#1F6FEB", "GH", new[] { "github", "git hub" }, new[] { "github.com" })
+    };
+
+    public static PresetIconMatch? Find(string? name, string? url)
+    {
+        var host = Host(url);
+        if (host is not null)
+        {
+            foreach (var entry in Entries)
+            {
+                if (entry.Hosts.Any(h => host.Equals(h, StringComparison.OrdinalIgnoreCase) || host.EndsWith("." + h, StringComparison.OrdinalIgnoreCase)))
+                    return entry;
+            }
+        }
+
+        var haystack = Normalize((name ?? "") + " " + (url ?? "") + " " + (host ?? ""));
+        return Entries
+            .SelectMany(entry => entry.Names.Select(alias => (entry, key: Normalize(alias))))
+            .Where(match => match.key.Length > 0 && haystack.Contains(match.key, StringComparison.Ordinal))
+            .OrderByDescending(match => match.key.Length)
+            .Select(match => (PresetIconMatch?)match.entry)
+            .FirstOrDefault();
+    }
+
+    public static bool IsKnownIcon(string? value) => Entries.Any(entry => string.Equals(entry.IconPath, value, StringComparison.OrdinalIgnoreCase));
+    public static bool IsKnownColor(string? value) => Entries.Any(entry => string.Equals(entry.BrandColor, value, StringComparison.OrdinalIgnoreCase));
+    public static bool IsKnownInitials(string? value) => Entries.Any(entry => string.Equals(entry.Initials, value, StringComparison.OrdinalIgnoreCase));
+
+    private static string? Host(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var text = value.Trim();
+        if (!text.Contains("://", StringComparison.Ordinal)) text = "https://" + text;
+        return Uri.TryCreate(text, UriKind.Absolute, out var uri) ? uri.Host.ToLowerInvariant() : null;
+    }
+
+    private static string Normalize(string value) => new(value.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
+}
+
 internal sealed class SettingsForm : Form
 {
     private readonly List<ApiConfig> apis;
@@ -664,8 +727,13 @@ internal sealed class SettingsForm : Form
             var width = Math.Max(S(420), editor.ClientSize.Width - S(48) - (editor.VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0));
             var y = S(20);
 
+            var nameField = TextField(api.DisplayName, v => { api.DisplayName = v; MarkDirty(); RenderSidebar(); }, 260);
+            nameField.Box.Leave += (_, _) => ApplySmartIcon(api);
+            var sourceField = TextField(api.SourceUrl ?? "", v => { api.SourceUrl = v; MarkDirty(); }, 330, mono: true, placeholder: "https://api.example.com/usage");
+            sourceField.Box.Leave += (_, _) => ApplySmartIcon(api);
+
             Section("Identity", ref y, width, Card(width,
-                Row("API name", null, TextField(api.DisplayName, v => { api.DisplayName = v; MarkDirty(); RenderSidebar(); }, 260)),
+                Row("API name", null, nameField),
                 Row("Provider / service type", null, TextField(api.Provider ?? "", v => { api.Provider = v; MarkDirty(); }, 260, placeholder: "Optional")),
                 LogoRow(api)));
 
@@ -677,7 +745,7 @@ internal sealed class SettingsForm : Form
 
             Section("Connection", ref y, width, Card(width,
                 ApiKeyRow(api),
-                Row("Usage endpoint URL", null, TextField(api.SourceUrl ?? "", v => { api.SourceUrl = v; MarkDirty(); }, 330, mono: true, placeholder: "https://api.example.com/usage")),
+                Row("Usage endpoint URL", null, sourceField),
                 PollRow(api)));
 
             UsageLimits(api, ref y, width);
@@ -992,6 +1060,37 @@ internal sealed class SettingsForm : Form
         {
             MessageBox.Show(this, ex.Message, "Trayce", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    private void ApplySmartIcon(ApiConfig api)
+    {
+        var match = PresetIconCatalog.Find(api.DisplayName, api.SourceUrl);
+        if (match is null) return;
+
+        var changed = false;
+        var resolvedLogo = ConfigStore.ResolvePath(api.LogoPath);
+        if (string.IsNullOrWhiteSpace(api.LogoPath) || PresetIconCatalog.IsKnownIcon(api.LogoPath) || resolvedLogo is null || !File.Exists(resolvedLogo))
+        {
+            changed |= !string.Equals(api.LogoPath, match.Value.IconPath, StringComparison.OrdinalIgnoreCase);
+            api.LogoPath = match.Value.IconPath;
+        }
+
+        if (string.IsNullOrWhiteSpace(api.BrandColor) || string.Equals(api.BrandColor, "#0078D4", StringComparison.OrdinalIgnoreCase) || PresetIconCatalog.IsKnownColor(api.BrandColor))
+        {
+            changed |= !string.Equals(api.BrandColor, match.Value.BrandColor, StringComparison.OrdinalIgnoreCase);
+            api.BrandColor = match.Value.BrandColor;
+        }
+
+        if (string.IsNullOrWhiteSpace(api.LogoText) || string.Equals(api.LogoText, "API", StringComparison.OrdinalIgnoreCase) || PresetIconCatalog.IsKnownInitials(api.LogoText))
+        {
+            changed |= !string.Equals(api.LogoText, match.Value.Initials, StringComparison.OrdinalIgnoreCase);
+            api.LogoText = match.Value.Initials;
+        }
+
+        if (!changed) return;
+        MarkDirty();
+        RenderSidebar();
+        RenderEditor();
     }
 
     private void Save()
