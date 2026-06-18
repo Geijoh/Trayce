@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using Svg;
 using System.ComponentModel;
 using System.Windows.Forms;
 using Microsoft.Win32;
@@ -683,115 +684,33 @@ internal static class IconPainter
 
     public static void Draw(Graphics g, string glyph, Rectangle bounds, Color color)
     {
-        using var pen = new Pen(color, Math.Max(1.5f, bounds.Width / 9f)) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
+        if (TryDrawSvg(g, glyph, bounds, color)) return;
+
         using var brush = new SolidBrush(color);
+        g.FillEllipse(brush, bounds.Left + bounds.Width / 2f - 2, bounds.Top + bounds.Height / 2f - 2, 4, 4);
+    }
 
-        var l = bounds.Left;
-        var t = bounds.Top;
-        var r = bounds.Right;
-        var b = bounds.Bottom;
-        var w = bounds.Width;
-        var h = bounds.Height;
-        var cx = l + w / 2f;
-        var cy = t + h / 2f;
+    private static bool TryDrawSvg(Graphics g, string glyph, Rectangle bounds, Color color)
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "assets", "fluentui", glyph + ".svg");
+        if (!File.Exists(path)) return false;
 
-        switch (glyph)
+        try
         {
-            case "refresh":
-                PointF p(float x, float y) => new(l + x / 24f * w, t + y / 24f * h);
-                g.DrawBezier(pen, p(3.5f, 9), p(6f, 4.4f), p(12.6f, 2.2f), p(18.4f, 5.6f));
-                g.DrawLine(pen, p(23, 4), p(23, 10));
-                g.DrawLine(pen, p(23, 10), p(17, 10));
-                g.DrawBezier(pen, p(20.5f, 15), p(18f, 19.6f), p(11.4f, 21.8f), p(5.6f, 18.4f));
-                g.DrawLine(pen, p(1, 20), p(1, 14));
-                g.DrawLine(pen, p(1, 14), p(7, 14));
-                break;
-            case "details":
-                g.DrawLine(pen, l + 3, b - 3, r - 3, t + 3);
-                g.DrawLine(pen, r - 3, t + 3, r - 3, t + 8);
-                g.DrawLine(pen, r - 3, t + 3, r - 8, t + 3);
-                g.DrawLine(pen, l + 3, b - 3, l + 3, b - 8);
-                g.DrawLine(pen, l + 3, b - 3, l + 8, b - 3);
-                break;
-            case "settings":
-                // three vertical sliders with handles (vertical equalizer)
-                g.DrawLine(pen, l + 4, t + 2, l + 4, b - 2);
-                g.DrawLine(pen, cx, t + 2, cx, b - 2);
-                g.DrawLine(pen, r - 4, t + 2, r - 4, b - 2);
-                g.FillEllipse(brush, l + 2, t + 4, 4, 4);
-                g.FillEllipse(brush, cx - 2, cy - 2, 4, 4);
-                g.FillEllipse(brush, r - 6, b - 8, 4, 4);
-                break;
-            case "code":
-                g.DrawLines(pen, new[] { new Point(l + 6, t + 4), new Point(l + 2, (int)cy), new Point(l + 6, b - 4) });
-                g.DrawLines(pen, new[] { new Point(r - 6, t + 4), new Point(r - 2, (int)cy), new Point(r - 6, b - 4) });
-                break;
-            case "windows":
-                g.DrawRectangle(pen, l + 2, t + 2, 5, 5);
-                g.DrawRectangle(pen, r - 7, t + 2, 5, 5);
-                g.DrawRectangle(pen, l + 2, b - 7, 5, 5);
-                g.DrawRectangle(pen, r - 7, b - 7, 5, 5);
-                break;
-            case "copy":
-                g.DrawRectangle(pen, l + 6, t + 6, w - 7, h - 7);
-                g.DrawRectangle(pen, l + 2, t + 2, w - 7, h - 7);
-                break;
-            case "eye":
-                using (var path = new GraphicsPath())
-                {
-                    path.AddBezier(l + 1, cy, l + 5, t + 4, r - 5, t + 4, r - 1, cy);
-                    path.AddBezier(r - 1, cy, r - 5, b - 4, l + 5, b - 4, l + 1, cy);
-                    g.DrawPath(pen, path);
-                }
-                g.DrawEllipse(pen, cx - 3, cy - 3, 6, 6);
-                break;
-            case "trash":
-                g.DrawLine(pen, l + 2, t + 5, r - 2, t + 5);
-                g.DrawLine(pen, l + 6, t + 5, l + 7, b - 2);
-                g.DrawLine(pen, r - 6, t + 5, r - 7, b - 2);
-                g.DrawLine(pen, l + 7, b - 2, r - 7, b - 2);
-                g.DrawLine(pen, l + 7, t + 2, r - 7, t + 2);
-                break;
-            case "power":
-                g.DrawLine(pen, cx, t + 2, cx, cy);
-                g.DrawArc(pen, l + 3, t + 4, w - 6, h - 6, 135, 270);
-                break;
-            case "plus":
-                g.DrawLine(pen, cx, t + 3, cx, b - 3);
-                g.DrawLine(pen, l + 3, cy, r - 3, cy);
-                break;
-            case "check":
-                g.DrawLines(pen, new[] { new Point(l + 2, (int)cy), new Point((int)cx - 1, b - 3), new Point(r - 2, t + 3) });
-                break;
-            case "alert":
-                g.DrawPolygon(pen, new[] { new PointF(cx, t + 2), new PointF(r - 2, b - 2), new PointF(l + 2, b - 2) });
-                g.DrawLine(pen, cx, cy - 1, cx, cy + 2);
-                g.FillEllipse(brush, cx - 1.1f, b - 5, 2.2f, 2.2f);
-                break;
-            case "info":
-                g.DrawEllipse(pen, l + 2, t + 2, w - 4, h - 4);
-                g.DrawLine(pen, cx, cy, cx, cy + 3);
-                g.FillEllipse(brush, cx - 1.1f, t + 4, 2.2f, 2.2f);
-                break;
-            case "link":
-                g.DrawLines(pen, new[] { new Point((int)cx + 2, t + 3), new Point(r - 2, (int)cy), new Point((int)cx + 2, b - 3) });
-                g.DrawLines(pen, new[] { new Point((int)cx - 2, t + 3), new Point(l + 2, (int)cy), new Point((int)cx - 2, b - 3) });
-                break;
-            case "upload":
-                g.DrawLine(pen, l + 2, b - 3, r - 2, b - 3);
-                g.DrawLine(pen, l + 2, b - 6, l + 2, b - 3);
-                g.DrawLine(pen, r - 2, b - 6, r - 2, b - 3);
-                g.DrawLines(pen, new[] { new Point(l + 4, (int)cy - 1), new Point((int)cx, t + 2), new Point(r - 4, (int)cy - 1) });
-                g.DrawLine(pen, cx, t + 2, cx, b - 6);
-                break;
-            case "image":
-                g.DrawRectangle(pen, l + 2, t + 3, w - 4, h - 6);
-                g.DrawEllipse(pen, l + 5, t + 6, 3, 3);
-                g.DrawLines(pen, new[] { new Point(l + 3, b - 4), new Point((int)cx, (int)cy), new Point(r - 3, b - 4) });
-                break;
-            default:
-                g.FillEllipse(brush, cx - 2, cy - 2, 4, 4);
-                break;
+            var svg = File.ReadAllText(path).Replace("#212121", $"#{color.R:X2}{color.G:X2}{color.B:X2}");
+            using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(svg));
+            var doc = SvgDocument.Open<SvgDocument>(stream);
+            using var bmp = new Bitmap(bounds.Width, bounds.Height);
+            doc.Width = bounds.Width;
+            doc.Height = bounds.Height;
+            doc.Draw(bmp);
+            g.DrawImage(bmp, bounds);
+            return true;
+        }
+        catch
+        {
+            // ponytail: missing/bad vendored icon falls back to a dot so the UI still paints.
+            return false;
         }
     }
 }
