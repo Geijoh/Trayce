@@ -6,7 +6,7 @@ Current build: self-contained .NET 8 Windows tray app with one tray icon per con
 
 Trayce can show static usage from local config or refresh live JSON from each API's configured `sourceUrl`. The tray icon shows a rounded brand badge with up to two tiny health bars; hover, left-click, and right-click reveal progressively more detail.
 
-[Download latest build](https://github.com/Geijoh/Trayce/releases/latest) - [Privacy policy](PRIVACY.md)
+[Download latest build](https://github.com/Geijoh/Trayce/releases/latest) ![GitHub Downloads](https://shields.io) - [Privacy policy](PRIVACY.md)
 
 ## Creation Note
 
