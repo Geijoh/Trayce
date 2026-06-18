@@ -1350,7 +1350,7 @@ internal static class PreviewRenderer
     public static void RenderSettings(string path)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
-        using var form = new SettingsForm(SampleConfig(), "anthropic")
+        using var form = new SettingsForm(SettingsSampleConfig(), "anthropic")
         {
             StartPosition = FormStartPosition.Manual,
             Location = new Point(-10000, -10000)
@@ -1480,12 +1480,17 @@ internal static class PreviewRenderer
                 Api("vercel", "Vercel", "Edge · Functions", "V", "#111111", true, "#111111", 30, "Last refresh failed (timeout)",
                     W("Daily", "calls", 18400, 50000, now.AddHours(6)),
                     W("Monthly", "dollars", 42, 150, now.AddDays(14))),
-                Api("linear", "Linear", "GraphQL API", "L", "#5E6AD2", true, "#5E6AD2", 900, null,
-                    W("Hourly", "requests", 620, 1500, now.AddMinutes(23))),
                 Api("aws", "AWS", "CloudWatch", "AWS", "#FF9900", true, "#FF9900", 1800, "API key rejected (403 Forbidden)",
                     W("Monthly", "dollars", 0, 2000, now.AddDays(14), "Budget alarm"))
             }
         };
+    }
+
+    private static TrayceConfig SettingsSampleConfig()
+    {
+        var config = SampleConfig();
+        config.Apis = config.Apis.Where(api => api.Id is "anthropic" or "github" or "cursor" or "aws").ToList();
+        return config;
     }
 }
 

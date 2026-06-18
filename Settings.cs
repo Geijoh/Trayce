@@ -107,7 +107,7 @@ internal sealed class RoundedButton : Control
         g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
         g.Clear(UiPalette.Backdrop(this, UiPalette.Card));
 
-        var fill = Accent ? UiPalette.Accent2 : hover ? HoverBack : Back;
+        var fill = Accent ? UiPalette.Accent2 : hover && Enabled ? HoverBack : Back;
         var rect = new Rectangle(0, 0, Width - 1, Height - 1);
         using (var back = new SolidBrush(fill)) UiPalette.FillRound(g, back, rect, Dpi.Scale(this, Radius));
         if (Bordered && !Accent)
@@ -226,17 +226,17 @@ internal sealed class ColorField : Control
         g.Clear(UiPalette.Backdrop(this, UiPalette.Card));
 
         var rect = new Rectangle(0, 0, Width - 1, Height - 1);
-        using (var back = new SolidBrush(hover ? UiPalette.ControlHover : UiPalette.Control)) UiPalette.FillRound(g, back, rect, Dpi.Scale(this, 6));
-        using (var border = new Pen(UiPalette.Border2)) UiPalette.DrawRound(g, border, rect, Dpi.Scale(this, 6));
+        using (var back = new SolidBrush(hover && Enabled ? UiPalette.ControlHover : UiPalette.Control)) UiPalette.FillRound(g, back, rect, Dpi.Scale(this, 6));
+        using (var border = new Pen(Enabled ? UiPalette.Border2 : UiPalette.Border)) UiPalette.DrawRound(g, border, rect, Dpi.Scale(this, 6));
 
         var sw = Dpi.Scale(this, 21);
         var swatch = new Rectangle(Dpi.Scale(this, 5), (Height - sw) / 2, sw, sw);
         Color color;
         try { color = ColorTranslator.FromHtml(hex); } catch { color = UiPalette.Accent2; }
-        using (var fill = new SolidBrush(color)) UiPalette.FillRound(g, fill, swatch, Dpi.Scale(this, 5));
+        using (var fill = new SolidBrush(Enabled ? color : Color.FromArgb(140, color))) UiPalette.FillRound(g, fill, swatch, Dpi.Scale(this, 5));
         using (var border = new Pen(UiPalette.Border2)) UiPalette.DrawRound(g, border, swatch, Dpi.Scale(this, 5));
 
-        using var text = new SolidBrush(UiPalette.Text);
+        using var text = new SolidBrush(Enabled ? UiPalette.Text : UiPalette.Text3);
         var font = UiFont.Px(12.5f, mono: true);
         var size = g.MeasureString(hex, font);
         g.DrawString(hex, font, text, swatch.Right + Dpi.Scale(this, 7), (Height - size.Height) / 2f);
@@ -726,7 +726,7 @@ internal sealed class SettingsForm : Form
         return card;
     }
 
-    private Control Row(string title, string? subtitle, Control right)
+    private Control Row(string title, string? subtitle, Control right, bool muted = false)
     {
         var leftHeight = subtitle is null ? S(20) : S(38);
         var height = Math.Max(right.Height, leftHeight) + S(subtitle is null ? 18 : 20);
@@ -738,7 +738,7 @@ internal sealed class SettingsForm : Form
             Location = P(16, subtitle is null ? 12 : 9),
             Size = Z(250, 20),
             Text = title,
-            ForeColor = UiPalette.Text,
+            ForeColor = muted ? UiPalette.Text3 : UiPalette.Text,
             Font = UiFont.Px(13f)
         };
         row.Controls.Add(titleLabel);
@@ -793,7 +793,7 @@ internal sealed class SettingsForm : Form
         var wrap = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = false, BackColor = Color.Transparent, Size = Z(130, 30) };
         wrap.Controls.Add(new ColorSwatch(BrandColor(api)) { Size = Z(24, 24), Margin = G(0, 3, 9, 0) });
         wrap.Controls.Add(new Label { Text = BrandColor(api), AutoSize = false, Size = Z(96, 30), TextAlign = ContentAlignment.MiddleLeft, ForeColor = UiPalette.Text2, Font = UiFont.Px(12.5f, mono: true) });
-        return Row("Brand color", "Default for this provider", wrap);
+        return Row("Brand color", "Provided default", wrap);
     }
 
     private Control ToggleRow(ApiConfig api)
@@ -813,6 +813,7 @@ internal sealed class SettingsForm : Form
     {
         var current = (api.CustomColor ?? api.BrandColor ?? "#0078D4").ToUpperInvariant();
         var field = new ColorField(current) { Size = Z(120, 31) };
+        field.Enabled = !api.UseBrandColor;
         field.Click += (_, _) =>
         {
             using var picker = new ColorPickerForm(api.CustomColor ?? api.BrandColor ?? "#0078D4", api.BrandColor ?? "#0078D4");
@@ -823,7 +824,7 @@ internal sealed class SettingsForm : Form
             RenderEditor();
             RenderSidebar();
         };
-        return Row("Custom tray color", "Overrides the brand default", field);
+        return Row("Custom tray color", "Overrides the brand default", field, muted: api.UseBrandColor);
     }
 
     private Control TrayPreviewRow(ApiConfig api) =>
@@ -842,7 +843,7 @@ internal sealed class SettingsForm : Form
         var copy = new GlyphButton { Glyph = "copy", Size = Z(31, 31) };
         copy.Click += (_, _) => { Clipboard.SetText(api.ApiKey ?? ""); Toaster.Show(this, "API key copied"); };
         wrap.Controls.Add(copy);
-        return Row("API key", "Stored with this API entry for future usage providers", wrap);
+        return Row("API key", "Stored in Windows Credential Manager - config JSON keeps metadata only.", wrap);
     }
 
     private Control PollRow(ApiConfig api)
