@@ -4,5 +4,6 @@ obj/
 dist/
 .superpowers/
 out/
+plans/
 trayce-preview.png
 *.user
