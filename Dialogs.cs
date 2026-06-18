@@ -92,7 +92,7 @@ internal sealed class AboutForm : Form
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.CenterParent;
         AutoScaleMode = AutoScaleMode.Dpi;
-        ClientSize = new Size(420, 438);
+        ClientSize = Z(420, 438);
         BackColor = UiPalette.Bg;
         ForeColor = UiPalette.Text;
         Font = UiFont.Px(12.5f);
@@ -105,8 +105,7 @@ internal sealed class AboutForm : Form
         Controls.Add(Centered("Version " + (typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "unknown"), 151, 20, 12.5f, false, UiPalette.Text2));
         Controls.Add(Centered("Native Windows tray monitoring for API usage, health, and quota signals.", 180, 44, 12.5f, false, UiPalette.Text2));
         Controls.Add(new Panel { Location = P(28, 242), Size = Z(364, 1), BackColor = UiPalette.Border });
-        Controls.Add(Centered("Created by Chris Johnson", 260, 20, 12.5f, true, UiPalette.Text));
-        Controls.Add(Centered("Copyright 2026 Chris Johnson. All rights reserved.", 284, 20, 12f, false, UiPalette.Text2));
+        Controls.Add(Centered("Copyright 2026 Chris Johnson.\nAll rights reserved.", 256, 42, 12f, false, UiPalette.Text2));
         Controls.Add(Centered(Disclaimer, 313, 44, 11.5f, false, UiPalette.Text3));
 
         var close = new TitleGlyphButton("close") { Location = P(374, 16), Size = Z(28, 28) };
