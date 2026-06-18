@@ -289,14 +289,7 @@ internal sealed class ApiListItem : Control
         var badge = new Rectangle(S(11), (Height - badgeSize) / 2, badgeSize, badgeSize);
         using (var badgeBrush = new SolidBrush(Brand.Color(api, UiPalette.Accent2)))
             UiPalette.FillRound(g, badgeBrush, badge, S(8));
-        var initials = !string.IsNullOrWhiteSpace(api.LogoText) ? api.LogoText : Logo.Initials(api.DisplayName);
-        var initPx = (initials.Length >= 3 ? 11f : initials.Length == 2 ? 13f : 16f) * (badgeSize / 30f);
-        using (var initFont = new Font("Segoe UI", Math.Max(6f, initPx), FontStyle.Bold, GraphicsUnit.Pixel))
-        using (var white = new SolidBrush(Color.White))
-        {
-            var size = g.MeasureString(initials, initFont);
-            g.DrawString(initials, initFont, white, badge.Left + (badge.Width - size.Width) / 2f, badge.Top + (badge.Height - size.Height) / 2f);
-        }
+        Logo.Draw(g, api, Rectangle.Inflate(badge, -S(5), -S(5)), Color.White, small: true);
 
         var textLeft = badge.Right + S(11);
         using var name = new SolidBrush(UiPalette.Text);
@@ -1084,6 +1077,7 @@ internal sealed class SettingsForm : Form
         Id = id,
         DisplayName = preset.Name,
         Provider = preset.Provider,
+        LogoPath = preset.IconPath,
         LogoText = preset.Initials,
         BrandColor = preset.BrandColor,
         UseBrandColor = true,

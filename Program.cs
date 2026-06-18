@@ -541,12 +541,13 @@ internal static class Logo
     public static void Draw(Graphics g, ApiConfig api, Rectangle bounds, Color textColor, bool small)
     {
         var logoPath = ConfigStore.ResolvePath(api.LogoPath);
-        if (logoPath is not null && File.Exists(logoPath))
+        var drawablePath = logoPath is null ? null : DrawablePath(logoPath);
+        if (drawablePath is not null && File.Exists(drawablePath))
         {
             try
             {
-                using var stream = File.OpenRead(logoPath);
-                if (string.Equals(Path.GetExtension(logoPath), ".ico", StringComparison.OrdinalIgnoreCase))
+                using var stream = File.OpenRead(drawablePath);
+                if (string.Equals(Path.GetExtension(drawablePath), ".ico", StringComparison.OrdinalIgnoreCase))
                 {
                     using var icon = new Icon(stream);
                     g.DrawIcon(icon, bounds);
@@ -569,6 +570,14 @@ internal static class Logo
         using var brush = new SolidBrush(textColor);
         var size = g.MeasureString(text, font);
         g.DrawString(text, font, brush, bounds.Left + (bounds.Width - size.Width) / 2, bounds.Top + (bounds.Height - size.Height) / 2);
+    }
+
+    private static string? DrawablePath(string logoPath)
+    {
+        if (!string.Equals(Path.GetExtension(logoPath), ".svg", StringComparison.OrdinalIgnoreCase)) return logoPath;
+
+        var png = Path.ChangeExtension(logoPath, ".png");
+        return File.Exists(png) ? png : null;
     }
 
     public static string Initials(string value)
@@ -1314,7 +1323,7 @@ internal static class PreviewRenderer
 
         var api = error
             ? new ApiConfig { Id = "vercel", DisplayName = "Vercel", Provider = "Edge · Functions", LogoText = "V", BrandColor = "#111111" }
-            : new ApiConfig { Id = "anthropic", DisplayName = "Anthropic", Provider = "Claude API", LogoText = "A", BrandColor = "#D97757" };
+            : new ApiConfig { Id = "anthropic", DisplayName = "Anthropic", Provider = "Claude API", LogoPath = PresetIcons.Anthropic, LogoText = "A", BrandColor = "#D97757" };
 
         var usage = error
             ? new UsageSnapshot
@@ -1451,6 +1460,7 @@ internal static class PreviewRenderer
             Id = id,
             DisplayName = name,
             Provider = provider,
+            LogoPath = PresetIcons.ForId(id),
             LogoText = logo,
             BrandColor = color,
             UseBrandColor = useBrand,
@@ -1564,7 +1574,13 @@ internal static class ConfigStore
     public static string? ResolvePath(string? path)
     {
         if (string.IsNullOrWhiteSpace(path)) return null;
-        return Path.IsPathRooted(path) ? path : Path.Combine(AppDir, path);
+        if (Path.IsPathRooted(path)) return path;
+
+        var imported = Path.Combine(AppDir, path);
+        if (File.Exists(imported)) return imported;
+
+        var bundled = Path.Combine(AppContext.BaseDirectory, path);
+        return File.Exists(bundled) ? bundled : imported;
     }
 
     public static string ImportLogo(string apiId, string sourcePath)
@@ -1610,6 +1626,7 @@ internal static class ConfigStore
                     Id = "openai",
                     DisplayName = "OpenAI",
                     Provider = "GPT-4o API",
+                    LogoPath = PresetIcons.OpenAI,
                     LogoText = "OAI",
                     BrandColor = "#10A37F",
                     ApiKey = "",
@@ -1910,11 +1927,7 @@ internal sealed class TrayPreview : Control
         var badge = new Rectangle(Width - Dpi.Scale(this, 31), Dpi.Scale(this, 7), Dpi.Scale(this, 19), Dpi.Scale(this, 19));
         using var color = new SolidBrush(Brand.Color(api, UiPalette.Accent2));
         UiPalette.FillRound(e.Graphics, color, badge, Dpi.Scale(this, 5));
-        using var font = new Font("Segoe UI", 6.5F, FontStyle.Bold);
-        using var white = new SolidBrush(Color.White);
-        var text = !string.IsNullOrWhiteSpace(api.LogoText) ? api.LogoText : Logo.Initials(api.DisplayName);
-        var size = e.Graphics.MeasureString(text, font);
-        e.Graphics.DrawString(text, font, white, badge.Left + (badge.Width - size.Width) / 2, badge.Top + (badge.Height - size.Height) / 2);
+        Logo.Draw(e.Graphics, api, Rectangle.Inflate(badge, -Dpi.Scale(this, 4), -Dpi.Scale(this, 4)), Color.White, small: true);
         using var accent = new SolidBrush(UiPalette.Accent);
         e.Graphics.FillRectangle(accent, Width - Dpi.Scale(this, 29), Dpi.Scale(this, 28), Dpi.Scale(this, 13), Dpi.Scale(this, 2));
         e.Graphics.FillRectangle(accent, Width - Dpi.Scale(this, 29), Dpi.Scale(this, 32), Dpi.Scale(this, 9), Dpi.Scale(this, 2));

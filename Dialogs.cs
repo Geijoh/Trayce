@@ -235,31 +235,76 @@ internal sealed class LogoPickerForm : Form
     }
 }
 
-internal readonly record struct ApiPreset(string Name, string Provider, string Initials, string BrandColor);
+internal static class PresetIcons
+{
+    public const string Anthropic = "assets/presets/anthropic.svg";
+    public const string OpenAI = "assets/presets/openai.svg";
+    public const string GoogleGemini = "assets/presets/google-gemini.svg";
+    public const string MistralAI = "assets/presets/mistral-ai.svg";
+    public const string XAIGrok = "assets/presets/xai-grok.svg";
+    public const string Perplexity = "assets/presets/perplexity.svg";
+    public const string DeepSeek = "assets/presets/deepseek.svg";
+    public const string Cohere = "assets/presets/cohere.svg";
+    public const string Groq = "assets/presets/groq.svg";
+    public const string TogetherAI = "assets/presets/together-ai.svg";
+    public const string OpenRouter = "assets/presets/openrouter.svg";
+    public const string HuggingFace = "assets/presets/hugging-face.svg";
+    public const string Replicate = "assets/presets/replicate.svg";
+    public const string FireworksAI = "assets/presets/fireworks-ai.svg";
+    public const string AzureOpenAI = "assets/presets/azure-openai.svg";
+    public const string AWSBedrock = "assets/presets/aws-bedrock.svg";
+    public const string ElevenLabs = "assets/presets/elevenlabs.svg";
+    public const string StabilityAI = "assets/presets/stability-ai.svg";
+
+    public static string? ForId(string id) => id.ToLowerInvariant() switch
+    {
+        "anthropic" => Anthropic,
+        "openai" => OpenAI,
+        "googlegemini" => GoogleGemini,
+        "mistralai" => MistralAI,
+        "xaigrok" => XAIGrok,
+        "perplexity" => Perplexity,
+        "deepseek" => DeepSeek,
+        "cohere" => Cohere,
+        "groq" => Groq,
+        "togetherai" => TogetherAI,
+        "openrouter" => OpenRouter,
+        "huggingface" => HuggingFace,
+        "replicate" => Replicate,
+        "fireworksai" => FireworksAI,
+        "azureopenai" => AzureOpenAI,
+        "awsbedrock" or "aws" => AWSBedrock,
+        "elevenlabs" => ElevenLabs,
+        "stabilityai" => StabilityAI,
+        _ => null
+    };
+}
+
+internal readonly record struct ApiPreset(string Name, string Provider, string Initials, string BrandColor, string IconPath);
 
 /// <summary>"Add API" service-preset picker — a grid of common AI services plus a blank/custom option.</summary>
 internal sealed class PresetPickerForm : Form
 {
     private static readonly ApiPreset[] Presets =
     {
-        new("Anthropic", "Claude API", "A", "#D97757"),
-        new("OpenAI", "GPT API", "OAI", "#10A37F"),
-        new("Google Gemini", "Gemini API", "G", "#1A73E8"),
-        new("Mistral AI", "Mistral API", "M", "#FA520F"),
-        new("xAI Grok", "Grok API", "xAI", "#111111"),
-        new("Perplexity", "Sonar API", "P", "#20808D"),
-        new("DeepSeek", "DeepSeek API", "DS", "#4D6BFE"),
-        new("Cohere", "Command API", "Co", "#39594D"),
-        new("Groq", "LPU Inference", "Gq", "#F55036"),
-        new("Together AI", "Inference API", "T", "#0F6FFF"),
-        new("OpenRouter", "Router API", "OR", "#6566F1"),
-        new("Hugging Face", "Inference API", "HF", "#FF9D00"),
-        new("Replicate", "Predictions", "R", "#1A1A1A"),
-        new("Fireworks AI", "Inference API", "Fw", "#5019C5"),
-        new("Azure OpenAI", "Azure API", "Az", "#0078D4"),
-        new("AWS Bedrock", "Bedrock API", "AWS", "#FF9900"),
-        new("ElevenLabs", "Audio API", "11", "#0B0B0B"),
-        new("Stability AI", "Image API", "St", "#A21CAF")
+        new("Anthropic", "Claude API", "A", "#D97757", PresetIcons.Anthropic),
+        new("OpenAI", "GPT API", "OAI", "#10A37F", PresetIcons.OpenAI),
+        new("Google Gemini", "Gemini API", "G", "#1A73E8", PresetIcons.GoogleGemini),
+        new("Mistral AI", "Mistral API", "M", "#FA520F", PresetIcons.MistralAI),
+        new("xAI Grok", "Grok API", "xAI", "#111111", PresetIcons.XAIGrok),
+        new("Perplexity", "Sonar API", "P", "#20808D", PresetIcons.Perplexity),
+        new("DeepSeek", "DeepSeek API", "DS", "#4D6BFE", PresetIcons.DeepSeek),
+        new("Cohere", "Command API", "Co", "#39594D", PresetIcons.Cohere),
+        new("Groq", "LPU Inference", "Gq", "#F55036", PresetIcons.Groq),
+        new("Together AI", "Inference API", "T", "#0F6FFF", PresetIcons.TogetherAI),
+        new("OpenRouter", "Router API", "OR", "#6566F1", PresetIcons.OpenRouter),
+        new("Hugging Face", "Inference API", "HF", "#FF9D00", PresetIcons.HuggingFace),
+        new("Replicate", "Predictions", "R", "#1A1A1A", PresetIcons.Replicate),
+        new("Fireworks AI", "Inference API", "Fw", "#5019C5", PresetIcons.FireworksAI),
+        new("Azure OpenAI", "Azure API", "Az", "#0078D4", PresetIcons.AzureOpenAI),
+        new("AWS Bedrock", "Bedrock API", "AWS", "#FF9900", PresetIcons.AWSBedrock),
+        new("ElevenLabs", "Audio API", "11", "#0B0B0B", PresetIcons.ElevenLabs),
+        new("Stability AI", "Image API", "St", "#A21CAF", PresetIcons.StabilityAI)
     };
 
     /// <summary>The chosen preset, or null with DialogResult.OK meaning "Blank / custom".</summary>
@@ -326,13 +371,14 @@ internal sealed class PresetPickerForm : Form
             Color color;
             try { color = ColorTranslator.FromHtml(preset.BrandColor); } catch { color = UiPalette.Accent2; }
             using (var b = new SolidBrush(color)) UiPalette.FillRound(g, b, badge, S(8));
-            var px = (preset.Initials.Length >= 3 ? 12f : preset.Initials.Length == 2 ? 15f : 18f) * (card.DeviceDpi / 96f);
-            using (var initFont = new Font("Segoe UI", px, FontStyle.Bold, GraphicsUnit.Pixel))
-            using (var white = new SolidBrush(Color.White))
+            var preview = new ApiConfig
             {
-                var s = g.MeasureString(preset.Initials, initFont);
-                g.DrawString(preset.Initials, initFont, white, badge.Left + (badge.Width - s.Width) / 2f, badge.Top + (badge.Height - s.Height) / 2f);
-            }
+                DisplayName = preset.Name,
+                LogoPath = preset.IconPath,
+                LogoText = preset.Initials,
+                BrandColor = preset.BrandColor
+            };
+            Logo.Draw(g, preview, Rectangle.Inflate(badge, -S(6), -S(6)), Color.White, small: true);
 
             using var name = new SolidBrush(UiPalette.Text);
             using var prov = new SolidBrush(UiPalette.Text3);
