@@ -397,7 +397,7 @@ internal static class IconRenderer
 
         if (stale)
         {
-            var dot = new Rectangle(badge.Right - 5, badge.Top - 3, 8, 8);
+            var dot = new Rectangle(badge.Right - 6, Math.Max(1, badge.Top - 1), 8, 8);
             using var border = new SolidBrush(UiPalette.TaskbarSolid);
             using var fill = new SolidBrush(StatusInfo.For(stale, usage.Message).Color);
             g.FillEllipse(border, dot.X - 1, dot.Y - 1, dot.Width + 2, dot.Height + 2);
@@ -418,16 +418,17 @@ internal static class IconRenderer
 
     private static Rectangle DrawBars(Graphics g, ApiConfig api, UsageSnapshot usage, Color color)
     {
-        var badge = new Rectangle((32 - 19) / 2, 3, 19, 19);
+        var badge = new Rectangle(4, 0, 24, 24);
         using (var brush = new SolidBrush(color)) UiPalette.FillRound(g, brush, badge, 5);
         DrawBadgeMark(g, api, badge);
 
         var ratios = UsageMath.Ratios(usage).Take(2).ToList();
         if (ratios.Count == 0) ratios.Add(UsageMath.Ratio(usage) ?? 0m);
-        const float barWidth = 16f;
-        const float barHeight = 2.5f;
+        const float barWidth = 23f;
+        const float barHeight = 3f;
+        const float barGap = 1f;
         var barX = badge.Left + (badge.Width - barWidth) / 2;
-        var y = badge.Bottom + 2.5f;
+        var y = badge.Bottom + 1f;
         using var track = new SolidBrush(Color.FromArgb(38, Color.White));
         foreach (var ratio in ratios)
         {
@@ -435,7 +436,7 @@ internal static class IconRenderer
             using var fill = new SolidBrush(UsageMath.ColorForRatio(ratio));
             UiPalette.FillRound(g, track, new RectangleF(barX, y, barWidth, barHeight), 1.5f);
             if (ratio > 0m) UiPalette.FillRound(g, fill, new RectangleF(barX, y, fillWidth, barHeight), 1.5f);
-            y += 4;
+            y += barHeight + barGap;
         }
 
         return badge;
@@ -443,22 +444,25 @@ internal static class IconRenderer
 
     private static Rectangle DrawMinimal(Graphics g, ApiConfig api, UsageSnapshot usage, Color color)
     {
-        var badge = new Rectangle((32 - 22) / 2, 3, 22, 22);
+        var badge = new Rectangle(3, 0, 26, 26);
         using (var brush = new SolidBrush(color)) UiPalette.FillRound(g, brush, badge, 6);
         DrawBadgeMark(g, api, badge);
 
         var ratio = UsageMath.Ratio(usage) ?? 0m;
-        var fillWidth = Math.Max(2f, 22f * (float)Math.Clamp(ratio, 0m, 1m));
+        const float barWidth = 26f;
+        const float barHeight = 3.5f;
+        const float barY = 28f;
+        var fillWidth = Math.Max(2f, barWidth * (float)Math.Clamp(ratio, 0m, 1m));
         using var track = new SolidBrush(Color.FromArgb(38, Color.White));
         using var fill = new SolidBrush(UsageMath.ColorForRatio(ratio));
-        UiPalette.FillRound(g, track, new RectangleF(badge.Left, badge.Bottom + 3, 22, 3), 1.5f);
-        if (ratio > 0m) UiPalette.FillRound(g, fill, new RectangleF(badge.Left, badge.Bottom + 3, fillWidth, 3), 1.5f);
+        UiPalette.FillRound(g, track, new RectangleF(badge.Left, barY, barWidth, barHeight), 1.75f);
+        if (ratio > 0m) UiPalette.FillRound(g, fill, new RectangleF(badge.Left, barY, fillWidth, barHeight), 1.75f);
         return badge;
     }
 
     private static Rectangle DrawRing(Graphics g, ApiConfig api, UsageSnapshot usage, Color color)
     {
-        var ring = new Rectangle(1, 1, 30, 30);
+        var ring = new Rectangle(0, 0, 32, 32);
         var ratio = UsageMath.Ratio(usage) ?? 0m;
         using (var track = new SolidBrush(UiPalette.ControlHover)) g.FillEllipse(track, ring);
         if (ratio > 0)
@@ -467,7 +471,7 @@ internal static class IconRenderer
             g.FillPie(arc, ring, -90, (float)(Math.Clamp(ratio, 0m, 1m) * 360m));
         }
 
-        var badge = new Rectangle((32 - 22) / 2, (32 - 22) / 2, 22, 22);
+        var badge = new Rectangle(4, 4, 24, 24);
         using (var brush = new SolidBrush(color)) g.FillEllipse(brush, badge);
         DrawBadgeMark(g, api, badge);
         return badge;
@@ -478,7 +482,7 @@ internal static class IconRenderer
         var logoPath = ConfigStore.ResolvePath(api.LogoPath);
         if (logoPath is not null && File.Exists(logoPath))
         {
-            var inset = badge.Width <= 19 ? 3 : 4;
+            var inset = badge.Width <= 24 ? 3 : 4;
             Logo.Draw(g, api, Rectangle.Inflate(badge, -inset, -inset), Color.White, small: true);
             return;
         }
