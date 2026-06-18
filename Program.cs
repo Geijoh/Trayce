@@ -840,9 +840,10 @@ internal sealed class DetailsForm : Form
         DoubleBuffered = true;
         Padding = new Padding(1);
 
-        const int pad = 16;
-        const int formWidth = 344;
-        const int contentWidth = formWidth - (pad * 2);
+        int S(int value) => Dpi.Scale(this, value);
+        var pad = S(16);
+        var formWidth = S(344);
+        var contentWidth = formWidth - (pad * 2);
         var windows = UsageMath.WindowsForDisplay(usage);
         var status = StatusInfo.For(stale, usage.Message);
         var showStatusBanner = stale;
@@ -850,14 +851,14 @@ internal sealed class DetailsForm : Form
 
         var root = new Panel { Dock = DockStyle.Fill, Padding = Padding.Empty, BackColor = UiPalette.Flyout };
 
-        var titleWidth = contentWidth - 36 - 12 - (onRefresh is null ? 0 : 40);
-        var badge = new LogoBadge(api) { Location = new Point(pad, 16), Size = new Size(36, 36), Radius = 9 };
+        var titleWidth = contentWidth - S(36) - S(12) - (onRefresh is null ? 0 : S(40));
+        var badge = new LogoBadge(api) { Location = new Point(pad, S(16)), Size = new Size(S(36), S(36)), Radius = 9 };
         var title = new Label
         {
             AutoSize = false,
             AutoEllipsis = true,
-            Location = new Point(64, 15),
-            Size = new Size(Math.Max(120, titleWidth), 22),
+            Location = new Point(S(64), S(15)),
+            Size = new Size(Math.Max(S(120), titleWidth), S(22)),
             Text = api.DisplayName,
             Font = new Font("Segoe UI", 11F, FontStyle.Bold),
             ForeColor = UiPalette.Text
@@ -866,8 +867,8 @@ internal sealed class DetailsForm : Form
         {
             AutoSize = false,
             AutoEllipsis = true,
-            Location = new Point(64, 37),
-            Size = new Size(Math.Max(120, titleWidth), 16),
+            Location = new Point(S(64), S(37)),
+            Size = new Size(Math.Max(S(120), titleWidth), S(16)),
             Text = api.Provider ?? "",
             Font = new Font("Segoe UI", 8.25F),
             ForeColor = UiPalette.Text3
@@ -875,13 +876,13 @@ internal sealed class DetailsForm : Form
         var updated = new Label
         {
             AutoSize = false,
-            Location = new Point(pad, 60),
-            Size = new Size(contentWidth, 16),
+            Location = new Point(pad, S(60)),
+            Size = new Size(contentWidth, S(16)),
             Text = "Updated " + Format.Relative(usage.ObservedAt),
             Font = new Font("Segoe UI", 8.25F),
             ForeColor = UiPalette.Text3
         };
-        var refresh = new GlyphButton { Glyph = "refresh", Location = new Point(formWidth - pad - 32, 16), Size = new Size(32, 32) };
+        var refresh = new GlyphButton { Glyph = "refresh", Location = new Point(formWidth - pad - S(32), S(16)), Size = new Size(S(32), S(32)) };
         refresh.Click += (_, _) => this.onRefresh?.Invoke();
 
         root.Controls.Add(badge);
@@ -890,7 +891,7 @@ internal sealed class DetailsForm : Form
         root.Controls.Add(updated);
         if (onRefresh is not null) root.Controls.Add(refresh);
 
-        var top = 84;
+        var top = S(84);
         if (showStatusBanner)
         {
             var banner = new FlyoutBanner("alert", status.Color, status.BannerBg, status.Label, usage.Message ?? "", contentWidth)
@@ -898,31 +899,32 @@ internal sealed class DetailsForm : Form
                 Location = new Point(pad, top)
             };
             root.Controls.Add(banner);
-            top += banner.Height + 13;
+            top += banner.Height + S(13);
         }
 
         foreach (var window in windows)
         {
             var row = new UsageWindowRow(window) { Location = new Point(pad, top), Width = contentWidth };
+            row.Height = S(row.Height);
             root.Controls.Add(row);
-            top += row.Height + 15;
+            top += row.Height + S(15);
         }
-        if (windows.Count > 0) top -= 11; // swap trailing 15 gap for 4px container padding
+        if (windows.Count > 0) top -= S(11); // swap trailing 15 gap for 4px container padding
 
         if (showInfoBanner)
         {
             var info = new FlyoutBanner("info", UiPalette.Text3, UiPalette.Control, null, usage.Message ?? "", contentWidth)
             {
-                Location = new Point(pad, top + 4)
+                Location = new Point(pad, top + S(4))
             };
             root.Controls.Add(info);
-            top += info.Height + 12;
+            top += info.Height + S(12);
         }
 
         if (onSettings is not null)
         {
-            top += 12;
-            root.Controls.Add(new Panel { BackColor = UiPalette.Border, Location = new Point(0, top), Size = new Size(formWidth, 1) });
+            top += S(12);
+            root.Controls.Add(new Panel { BackColor = UiPalette.Border, Location = new Point(0, top), Size = new Size(formWidth, S(1)) });
             var manage = new Button
             {
                 Text = "Manage in Settings",
@@ -930,8 +932,8 @@ internal sealed class DetailsForm : Form
                 BackColor = UiPalette.Accent2,
                 ForeColor = Color.White,
                 Font = new Font("Segoe UI", 9.4F, FontStyle.Bold),
-                Location = new Point(pad, top + 14),
-                Size = new Size(contentWidth, 33),
+                Location = new Point(pad, top + S(14)),
+                Size = new Size(contentWidth, S(33)),
                 Cursor = Cursors.Hand
             };
             manage.FlatAppearance.BorderSize = 0;
@@ -941,14 +943,14 @@ internal sealed class DetailsForm : Form
                 this.onSettings?.Invoke();
             };
             root.Controls.Add(manage);
-            top += 14 + 33 + 16;
+            top += S(14 + 33 + 16);
         }
         else
         {
-            top += 14;
+            top += S(14);
         }
 
-        ClientSize = new Size(formWidth, Math.Min(760, top));
+        ClientSize = new Size(formWidth, Math.Min(S(760), top));
         Controls.Add(root);
         if (!previewMode)
         {
@@ -1620,6 +1622,11 @@ internal static class ConfigStore
         EnsureSample();
         var config = JsonSerializer.Deserialize<TrayceConfig>(File.ReadAllText(ConfigPath), JsonOptions) ?? new TrayceConfig();
         Validate(config);
+        if (config.AutoApplyPresetIcons && PresetIconCatalog.Apply(config))
+        {
+            try { Save(config); }
+            catch { } // ponytail: auto-fill is cosmetic; failed persistence should not block app launch.
+        }
         return config;
     }
 
@@ -2264,6 +2271,8 @@ internal sealed class TrayceConfig
 {
     public List<ApiConfig> Apis { get; set; } = new();
 
+    public bool AutoApplyPresetIcons { get; set; } = true;
+
     /// <summary>"system" (default), "light", or "dark".</summary>
     public string? Theme { get; set; }
 
@@ -2553,6 +2562,22 @@ internal static class SelfTest
         Check(inferred.HasValue && inferred.Value.IconPath == PresetIcons.Anthropic && inferred.Value.BrandColor == "#D97757", "preset icon inference");
         var azure = PresetIconCatalog.Find("OpenAI usage", "https://trayce.openai.azure.com/openai/deployments/gpt-4o");
         Check(azure.HasValue && azure.Value.IconPath == PresetIcons.AzureOpenAI, "preset icon azure host");
+        var configWithMissingIcon = new TrayceConfig
+        {
+            Apis = new List<ApiConfig> { new() { Id = "claude", DisplayName = "Claude proxy", LogoText = "API", BrandColor = "#0078D4" } }
+        };
+        Check(PresetIconCatalog.Apply(configWithMissingIcon), "preset config apply changed");
+        Check(configWithMissingIcon.Apis[0].LogoPath == PresetIcons.Anthropic && configWithMissingIcon.Apis[0].BrandColor == "#D97757", "preset config apply values");
+        var customLogo = Path.GetTempFileName();
+        try
+        {
+            var custom = new ApiConfig { Id = "openai", DisplayName = "OpenAI", LogoPath = customLogo, LogoText = "X", BrandColor = "#123456" };
+            Check(!PresetIconCatalog.Apply(custom), "preset preserves custom values");
+        }
+        finally
+        {
+            File.Delete(customLogo);
+        }
 
         using var controller = new DetailsPopupController();
         var first = new DetailsForm(api, windowed, stale: false, previewMode: true);

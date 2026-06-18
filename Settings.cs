@@ -380,6 +380,41 @@ internal static class PresetIconCatalog
     public static bool IsKnownColor(string? value) => Entries.Any(entry => string.Equals(entry.BrandColor, value, StringComparison.OrdinalIgnoreCase));
     public static bool IsKnownInitials(string? value) => Entries.Any(entry => string.Equals(entry.Initials, value, StringComparison.OrdinalIgnoreCase));
 
+    public static bool Apply(TrayceConfig config)
+    {
+        var changed = false;
+        foreach (var api in config.Apis) changed |= Apply(api);
+        return changed;
+    }
+
+    public static bool Apply(ApiConfig api)
+    {
+        var match = Find(api.DisplayName, api.SourceUrl);
+        if (match is null) return false;
+
+        var changed = false;
+        var resolvedLogo = ConfigStore.ResolvePath(api.LogoPath);
+        if (string.IsNullOrWhiteSpace(api.LogoPath) || IsKnownIcon(api.LogoPath) || resolvedLogo is null || !File.Exists(resolvedLogo))
+        {
+            changed |= !string.Equals(api.LogoPath, match.Value.IconPath, StringComparison.OrdinalIgnoreCase);
+            api.LogoPath = match.Value.IconPath;
+        }
+
+        if (string.IsNullOrWhiteSpace(api.BrandColor) || string.Equals(api.BrandColor, "#0078D4", StringComparison.OrdinalIgnoreCase) || IsKnownColor(api.BrandColor))
+        {
+            changed |= !string.Equals(api.BrandColor, match.Value.BrandColor, StringComparison.OrdinalIgnoreCase);
+            api.BrandColor = match.Value.BrandColor;
+        }
+
+        if (string.IsNullOrWhiteSpace(api.LogoText) || string.Equals(api.LogoText, "API", StringComparison.OrdinalIgnoreCase) || IsKnownInitials(api.LogoText))
+        {
+            changed |= !string.Equals(api.LogoText, match.Value.Initials, StringComparison.OrdinalIgnoreCase);
+            api.LogoText = match.Value.Initials;
+        }
+
+        return changed;
+    }
+
     private static string? Host(string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return null;
@@ -400,6 +435,7 @@ internal sealed class SettingsForm : Form
     private Label footerStatus = new();
     private string selectedId;
     private ThemeMode themeMode;
+    private bool autoApplyPresetIcons;
     private bool dirty;
     private bool saved;
     private bool revealKey;
@@ -414,6 +450,7 @@ internal sealed class SettingsForm : Form
     {
         this.onSaved = onSaved;
         themeMode = SystemTheme.Parse(config.Theme);
+        autoApplyPresetIcons = config.AutoApplyPresetIcons;
         Text = "Trayce — Settings";
         Icon = AppIcon.Load();
         AutoScaleMode = AutoScaleMode.Dpi;
@@ -732,6 +769,9 @@ internal sealed class SettingsForm : Form
             var sourceField = TextField(api.SourceUrl ?? "", v => { api.SourceUrl = v; MarkDirty(); }, 330, mono: true, placeholder: "https://api.example.com/usage");
             sourceField.Box.Leave += (_, _) => ApplySmartIcon(api);
 
+            Section("Application", ref y, width, Card(width,
+                AutoIconRow()));
+
             Section("Identity", ref y, width, Card(width,
                 Row("API name", null, nameField),
                 Row("Provider / service type", null, TextField(api.Provider ?? "", v => { api.Provider = v; MarkDirty(); }, 260, placeholder: "Optional")),
@@ -751,7 +791,7 @@ internal sealed class SettingsForm : Form
             UsageLimits(api, ref y, width);
 
             var json = new RoundedButton("Open config JSON") { Glyph = "code", Bordered = false, Back = Color.Transparent, Foreground = UiPalette.Accent, GlyphColor = UiPalette.Accent, TextPx = 12.5f, Location = new Point(S(24), y), Size = Z(180, 26) };
-            json.Click += (_, _) => new JsonPreviewForm(new TrayceConfig { Apis = apis.Select(Clone).ToList() }).ShowDialog(this);
+            json.Click += (_, _) => new JsonPreviewForm(EditedConfig()).ShowDialog(this);
             editor.Controls.Add(json);
             y += S(56);
 
@@ -853,6 +893,20 @@ internal sealed class SettingsForm : Form
         choose.Click += (_, _) => ChooseLogo(api);
         wrap.Controls.Add(choose);
         return Row("Logo", "Image, or falls back to initials", wrap);
+    }
+
+    private Control AutoIconRow()
+    {
+        var toggle = new ToggleSwitch(autoApplyPresetIcons) { Size = Z(40, 21) };
+        toggle.Click += (_, _) =>
+        {
+            autoApplyPresetIcons = !autoApplyPresetIcons;
+            if (autoApplyPresetIcons) PresetIconCatalog.Apply(new TrayceConfig { Apis = apis });
+            MarkDirty();
+            RenderSidebar();
+            RenderEditor();
+        };
+        return Row("Auto-match LobeHub icons", "Updates missing/default logos and colors", toggle);
     }
 
     private Control BrandRow(ApiConfig api)
@@ -1064,30 +1118,7 @@ internal sealed class SettingsForm : Form
 
     private void ApplySmartIcon(ApiConfig api)
     {
-        var match = PresetIconCatalog.Find(api.DisplayName, api.SourceUrl);
-        if (match is null) return;
-
-        var changed = false;
-        var resolvedLogo = ConfigStore.ResolvePath(api.LogoPath);
-        if (string.IsNullOrWhiteSpace(api.LogoPath) || PresetIconCatalog.IsKnownIcon(api.LogoPath) || resolvedLogo is null || !File.Exists(resolvedLogo))
-        {
-            changed |= !string.Equals(api.LogoPath, match.Value.IconPath, StringComparison.OrdinalIgnoreCase);
-            api.LogoPath = match.Value.IconPath;
-        }
-
-        if (string.IsNullOrWhiteSpace(api.BrandColor) || string.Equals(api.BrandColor, "#0078D4", StringComparison.OrdinalIgnoreCase) || PresetIconCatalog.IsKnownColor(api.BrandColor))
-        {
-            changed |= !string.Equals(api.BrandColor, match.Value.BrandColor, StringComparison.OrdinalIgnoreCase);
-            api.BrandColor = match.Value.BrandColor;
-        }
-
-        if (string.IsNullOrWhiteSpace(api.LogoText) || string.Equals(api.LogoText, "API", StringComparison.OrdinalIgnoreCase) || PresetIconCatalog.IsKnownInitials(api.LogoText))
-        {
-            changed |= !string.Equals(api.LogoText, match.Value.Initials, StringComparison.OrdinalIgnoreCase);
-            api.LogoText = match.Value.Initials;
-        }
-
-        if (!changed) return;
+        if (!autoApplyPresetIcons || !PresetIconCatalog.Apply(api)) return;
         MarkDirty();
         RenderSidebar();
         RenderEditor();
@@ -1105,7 +1136,7 @@ internal sealed class SettingsForm : Form
 
         try
         {
-            ConfigStore.Save(new TrayceConfig { Apis = apis.Select(Clone).ToList(), Theme = SystemTheme.ToConfig(themeMode), TrayStyle = TrayStyles.ToConfig(UiPalette.Tray) });
+            ConfigStore.Save(EditedConfig());
             dirty = false;
             saved = true;
             UpdateFooter();
@@ -1224,5 +1255,13 @@ internal sealed class SettingsForm : Form
         SourceUrl = api.SourceUrl,
         PollSeconds = api.PollSeconds,
         Usage = api.Usage?.Clone()
+    };
+
+    private TrayceConfig EditedConfig() => new()
+    {
+        Apis = apis.Select(Clone).ToList(),
+        Theme = SystemTheme.ToConfig(themeMode),
+        TrayStyle = TrayStyles.ToConfig(UiPalette.Tray),
+        AutoApplyPresetIcons = autoApplyPresetIcons
     };
 }

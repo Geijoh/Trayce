@@ -2,7 +2,7 @@
 
 Lightweight Windows tray utility for watching API usage at a glance.
 
-Current build: self-contained .NET 8 Windows tray app with one tray icon per configured API, custom brand/logo marks, stacked usage windows, light/dark themes, and per-monitor DPI-aware rendering.
+Current build: self-contained .NET 8 Windows tray app with one tray icon per configured API, custom brand/logo marks, automatic bundled logo matching, stacked usage windows, light/dark themes, and per-monitor DPI-aware rendering.
 
 Trayce can show static usage from local config or refresh live JSON from each API's configured `sourceUrl`. The tray icon shows a rounded brand badge with up to two tiny health bars; hover, left-click, and right-click reveal progressively more detail.
 
@@ -68,7 +68,7 @@ On first run, Trayce creates a sample config. Each configured API gets one tray 
 - Hover for the summary tooltip.
 - Left-click for the details flyout.
 - Right-click for refresh, details, settings, config JSON, reload, startup toggle, or quit.
-- Open settings to edit API identity, logo, brand color, source URL, poll cadence, and usage windows.
+- Open settings to edit API identity, logo, brand color, source URL, poll cadence, usage windows, and automatic logo matching.
 
 ## Configure usage
 
@@ -76,6 +76,7 @@ Static usage can live directly in `%APPDATA%\Trayce\apis.json`:
 
 ```json
 {
+  "autoApplyPresetIcons": true,
   "apis": [
     {
       "id": "openai",
