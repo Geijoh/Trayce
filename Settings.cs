@@ -486,7 +486,7 @@ internal sealed class SettingsForm : Form
         {
             AutoSize = false,
             Location = P(41, 0),
-            Size = Z(260, 46),
+            Size = Z(168, 46),
             Text = "Trayce — Settings",
             TextAlign = ContentAlignment.MiddleLeft,
             ForeColor = UiPalette.Text2,
@@ -507,6 +507,8 @@ internal sealed class SettingsForm : Form
         var matchToggle = new ToggleSwitch(matchOn) { Size = Z(34, 18) };
         matchToggle.Click += (_, _) => ApplyTheme(UiPalette.Mode == ThemeMode.System ? (UiPalette.IsDark ? ThemeMode.Dark : ThemeMode.Light) : ThemeMode.System);
         var matchLabel = new Label { AutoSize = false, Text = "Match system", TextAlign = ContentAlignment.MiddleRight, ForeColor = UiPalette.Text2, Font = UiFont.Px(11.5f), Size = Z(104, 46) };
+        var about = new RoundedButton("About") { Glyph = "info", Size = Z(84, 28), TextPx = 12f, Back = UiPalette.Control, Foreground = UiPalette.Text2, BorderColor = UiPalette.Border2 };
+        about.Click += (_, _) => new AboutForm().ShowDialog(this);
 
         var traySeg = new SegmentedToggle(new[] { "Bars", "Ring", "Minimal" }, (int)UiPalette.Tray) { Size = Z(156, 26) };
         traySeg.SelectionChanged += (_, _) => ApplyTrayStyle((TrayStyle)traySeg.SelectedIndex);
@@ -515,6 +517,7 @@ internal sealed class SettingsForm : Form
         title.Controls.Add(trayLabel);
         title.Controls.Add(traySeg);
         title.Controls.Add(matchLabel);
+        title.Controls.Add(about);
         title.Controls.Add(matchToggle);
         title.Controls.Add(segment);
         title.Controls.Add(min);
@@ -533,7 +536,10 @@ internal sealed class SettingsForm : Form
             segment.Location = new Point(w - S(138) - S(12) - segment.Width, (h - segment.Height) / 2);
             matchToggle.Location = new Point(segment.Left - S(12) - matchToggle.Width, (h - matchToggle.Height) / 2);
             matchLabel.Location = new Point(matchToggle.Left - matchLabel.Width - S(2), 0);
-            traySeg.Location = new Point(matchLabel.Left - S(14) - traySeg.Width, (h - traySeg.Height) / 2);
+            about.Visible = w >= S(920);
+            about.Location = new Point(matchLabel.Left - S(12) - about.Width, (h - about.Height) / 2);
+            var trayRight = about.Visible ? about.Left - S(14) : matchLabel.Left - S(14);
+            traySeg.Location = new Point(trayRight - traySeg.Width, (h - traySeg.Height) / 2);
             trayLabel.Location = new Point(traySeg.Left - trayLabel.Width - S(2), 0);
         }
 

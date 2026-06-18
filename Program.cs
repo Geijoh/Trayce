@@ -160,6 +160,8 @@ internal sealed class TrayceContext : ApplicationContext
             new("Open config JSON", "code", OpenConfig),
             new("Reload config", "refresh", () => { Reload(); Toaster.Show(null, "Configuration reloaded"); }),
             TrayMenu.Item.Sep,
+            new("About Trayce", "info", ShowAbout),
+            TrayMenu.Item.Sep,
             new("Start with Windows", "windows", () =>
             {
                 var enable = !StartupStore.IsEnabled();
@@ -171,6 +173,12 @@ internal sealed class TrayceContext : ApplicationContext
         };
 
         new TrayMenu(items).ShowAt(Cursor.Position);
+    }
+
+    internal void ShowAbout()
+    {
+        using var form = new AboutForm();
+        form.ShowDialog();
     }
 
     internal void OpenConfig()
@@ -1397,6 +1405,7 @@ internal static class PreviewRenderer
         Capture(Path.Combine(dir, "dialog-json.png"), new JsonPreviewForm(SampleConfig()));
         Capture(Path.Combine(dir, "dialog-validation.png"), new ValidationForm(new[] { "API name can’t be empty.", "The limit for “Daily” must be greater than zero." }));
         Capture(Path.Combine(dir, "dialog-logo.png"), new LogoPickerForm(new ApiConfig { Id = "anthropic", DisplayName = "Anthropic", LogoText = "A", BrandColor = "#D97757" }));
+        Capture(Path.Combine(dir, "dialog-about.png"), new AboutForm());
         Capture(Path.Combine(dir, "overlay-quit.png"), new QuitForm(() => { }));
         Capture(Path.Combine(dir, "toast.png"), new ToastForm("Settings saved"));
     }
@@ -1426,6 +1435,8 @@ internal static class PreviewRenderer
         TrayMenu.Item.Sep,
         new("Open config JSON", "code", () => { }),
         new("Reload config", "refresh", () => { }),
+        TrayMenu.Item.Sep,
+        new("About Trayce", "info", () => { }),
         TrayMenu.Item.Sep,
         new("Start with Windows", "windows", () => { }, Checked: true),
         TrayMenu.Item.Sep,

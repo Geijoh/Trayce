@@ -79,6 +79,83 @@ internal sealed class ToastForm : Form
     }
 }
 
+internal sealed class AboutForm : Form
+{
+    private const string GitHubUrl = "https://github.com/Geijoh/Trayce";
+    private const string PrivacyUrl = "https://github.com/Geijoh/Trayce/blob/main/PRIVACY.md";
+    private const string Disclaimer = "Product names, logos, and brands are property of their respective owners. Trayce is not affiliated with, endorsed by, or sponsored by those owners.";
+
+    public AboutForm()
+    {
+        Text = "About Trayce";
+        Icon = AppIcon.Load();
+        FormBorderStyle = FormBorderStyle.None;
+        StartPosition = FormStartPosition.CenterParent;
+        AutoScaleMode = AutoScaleMode.Dpi;
+        ClientSize = new Size(420, 438);
+        BackColor = UiPalette.Bg;
+        ForeColor = UiPalette.Text;
+        Font = UiFont.Px(12.5f);
+        ShowInTaskbar = false;
+        KeyPreview = true;
+        Padding = new Padding(1);
+
+        Controls.Add(new AppMark { Location = P(186, 54), Size = Z(48, 48) });
+        Controls.Add(Centered("Trayce", 118, 28, 21f, true, UiPalette.Text));
+        Controls.Add(Centered("Version " + (typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "unknown"), 151, 20, 12.5f, false, UiPalette.Text2));
+        Controls.Add(Centered("Native Windows tray monitoring for API usage, health, and quota signals.", 180, 44, 12.5f, false, UiPalette.Text2));
+        Controls.Add(new Panel { Location = P(28, 242), Size = Z(364, 1), BackColor = UiPalette.Border });
+        Controls.Add(Centered("Created by Chris Johnson", 260, 20, 12.5f, true, UiPalette.Text));
+        Controls.Add(Centered("Copyright 2026 Chris Johnson. All rights reserved.", 284, 20, 12f, false, UiPalette.Text2));
+        Controls.Add(Centered(Disclaimer, 313, 44, 11.5f, false, UiPalette.Text3));
+
+        var close = new TitleGlyphButton("close") { Location = P(374, 16), Size = Z(28, 28) };
+        close.Click += (_, _) => Close();
+        Controls.Add(close);
+
+        var github = new RoundedButton("GitHub") { Glyph = "link", Size = Z(170, 34), Location = P(28, 384), Back = UiPalette.Control, Foreground = UiPalette.Text };
+        github.Click += (_, _) => OpenUrl(GitHubUrl);
+        var privacy = new RoundedButton("Privacy Policy") { Glyph = "info", Size = Z(176, 34), Location = P(216, 384), Back = UiPalette.Control, Foreground = UiPalette.Text };
+        privacy.Click += (_, _) => OpenUrl(PrivacyUrl);
+        Controls.Add(github);
+        Controls.Add(privacy);
+
+        KeyDown += (_, e) => { if (e.KeyCode == Keys.Escape) Close(); };
+    }
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        NativeChrome.ApplyWindows11Corners(this);
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        using var pen = new Pen(UiPalette.Border2);
+        e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
+    }
+
+    private Label Centered(string text, int y, int height, float px, bool bold, Color color) => new()
+    {
+        AutoSize = false,
+        Text = text,
+        TextAlign = ContentAlignment.MiddleCenter,
+        Location = P(30, y),
+        Size = Z(360, height),
+        ForeColor = color,
+        Font = UiFont.Px(px, bold)
+    };
+
+    private Point P(int x, int y) => new(Dpi.Scale(this, x), Dpi.Scale(this, y));
+    private Size Z(int width, int height) => new(Dpi.Scale(this, width), Dpi.Scale(this, height));
+
+    private static void OpenUrl(string url)
+    {
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); }
+        catch { }
+    }
+}
+
 /// <summary>Prototype-style logo chooser: description, dashed drop/browse area, sample-file list, Cancel/Choose.</summary>
 internal sealed class LogoPickerForm : Form
 {
