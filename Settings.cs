@@ -50,6 +50,7 @@ internal sealed class RoundedTextBox : Control
     public override string Text { get => Box.Text; set => Box.Text = value ?? ""; }
     public bool Password { get => Box.UseSystemPasswordChar; set => Box.UseSystemPasswordChar = value; }
     public bool ReadOnlyBox { get => Box.ReadOnly; set => Box.ReadOnly = value; }
+    public string Placeholder { get => Box.PlaceholderText; set => Box.PlaceholderText = value; }
 
     protected override void OnSizeChanged(EventArgs e)
     {
@@ -281,7 +282,7 @@ internal sealed class ApiListItem : Control
         if (selected)
         {
             using var accent = new SolidBrush(UiPalette.Accent);
-            UiPalette.FillRound(g, accent, new Rectangle(0, S(10), S(3), Height - S(20)), S(3));
+            UiPalette.FillRound(g, accent, new Rectangle(S(1), S(10), S(3), Height - S(20)), S(3));
         }
 
         var badgeSize = S(30);
@@ -318,10 +319,12 @@ internal sealed class ApiListItem : Control
         var pctSize = g.MeasureString(pct, pctFont);
         g.DrawString(pct, pctFont, health, Width - pctSize.Width - S(14), S(9));
 
-        var bar = new Rectangle(Width - S(14) - S(42), S(31), S(42), S(4));
+        var bar = new Rectangle(Width - S(14) - S(46), S(31), S(46), S(4));
         using var barBack = new SolidBrush(UiPalette.ControlHover);
         UiPalette.FillRound(g, barBack, bar, S(4));
-        UiPalette.FillRound(g, health, new Rectangle(bar.X, bar.Y, (int)(bar.Width * Math.Clamp(ratio, 0m, 1m)), bar.Height), S(4));
+        var fillWidth = (int)(bar.Width * Math.Clamp(ratio, 0m, 1m));
+        if (ratio > 0m) fillWidth = Math.Max(S(5), fillWidth);
+        UiPalette.FillRound(g, health, new Rectangle(bar.X, bar.Y, Math.Min(bar.Width, fillWidth), bar.Height), S(4));
     }
 
     private static string PollText(int seconds)
@@ -360,7 +363,7 @@ internal sealed class SettingsForm : Form
         AutoScaleMode = AutoScaleMode.Dpi;
         StartPosition = FormStartPosition.CenterScreen;
         FormBorderStyle = FormBorderStyle.None;
-        MinimumSize = new Size(840, 560);
+        MinimumSize = new Size(S(840), S(560));
         ClientSize = new Size(940, 680);
         BackColor = UiPalette.Bg;
         Font = UiFont.Px(13f);
@@ -407,8 +410,11 @@ internal sealed class SettingsForm : Form
         editor = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = UiPalette.Bg };
         footerStatus = new Label { AutoSize = false, TextAlign = ContentAlignment.MiddleLeft };
         Controls.Add(BuildShell());
-        NativeChrome.ApplyDarkScrollbars(editor);
-        NativeChrome.ApplyDarkScrollbars(sidebarList);
+        if (UiPalette.IsDark)
+        {
+            NativeChrome.ApplyDarkScrollbars(editor);
+            NativeChrome.ApplyDarkScrollbars(sidebarList);
+        }
         RenderSidebar();
         RenderEditor();
         UpdateFooter();
@@ -468,9 +474,9 @@ internal sealed class SettingsForm : Form
 
         var shell = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = UiPalette.Bg, ColumnCount = 1, RowCount = 3 };
         shell.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        shell.RowStyles.Add(new RowStyle(SizeType.Absolute, S(42)));
+        shell.RowStyles.Add(new RowStyle(SizeType.Absolute, S(46)));
         shell.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        shell.RowStyles.Add(new RowStyle(SizeType.Absolute, S(54)));
+        shell.RowStyles.Add(new RowStyle(SizeType.Absolute, S(56)));
         shell.Controls.Add(BuildTitleBar(), 0, 0);
         shell.Controls.Add(body, 0, 1);
         shell.Controls.Add(BuildFooter(), 0, 2);
@@ -479,7 +485,7 @@ internal sealed class SettingsForm : Form
 
     private Control BuildTitleBar()
     {
-        var title = new Panel { Dock = DockStyle.Fill, Height = S(42), BackColor = UiPalette.Titlebar };
+        var title = new Panel { Dock = DockStyle.Fill, Height = S(46), BackColor = UiPalette.Titlebar };
         title.MouseDown += (_, e) => { if (e.Button == MouseButtons.Left) NativeChrome.DragWindow(Handle); };
 
         title.Controls.Add(new AppMark { Location = P(14, 12), Size = Z(18, 18) });
@@ -487,18 +493,18 @@ internal sealed class SettingsForm : Form
         {
             AutoSize = false,
             Location = P(41, 0),
-            Size = Z(260, 42),
+            Size = Z(260, 46),
             Text = "Trayce — Settings",
             TextAlign = ContentAlignment.MiddleLeft,
             ForeColor = UiPalette.Text2,
             Font = UiFont.Px(12.5f)
         });
 
-        var close = new TitleGlyphButton("close") { Size = Z(46, 42) };
+        var close = new TitleGlyphButton("close") { Size = Z(46, 46) };
         close.Click += (_, _) => Close();
-        var max = new TitleGlyphButton("max") { Size = Z(46, 42) };
+        var max = new TitleGlyphButton("max") { Size = Z(46, 46) };
         max.Click += (_, _) => WindowState = WindowState == FormWindowState.Maximized ? FormWindowState.Normal : FormWindowState.Maximized;
-        var min = new TitleGlyphButton("min") { Size = Z(46, 42) };
+        var min = new TitleGlyphButton("min") { Size = Z(46, 46) };
         min.Click += (_, _) => WindowState = FormWindowState.Minimized;
 
         // theme cluster (mirrors the prototype's floating Light/Dark toggle + a Match-system switch)
@@ -507,11 +513,11 @@ internal sealed class SettingsForm : Form
         segment.SelectionChanged += (_, _) => ApplyTheme(segment.SelectedIndex == 0 ? ThemeMode.Light : ThemeMode.Dark);
         var matchToggle = new ToggleSwitch(matchOn) { Size = Z(34, 18) };
         matchToggle.Click += (_, _) => ApplyTheme(UiPalette.Mode == ThemeMode.System ? (UiPalette.IsDark ? ThemeMode.Dark : ThemeMode.Light) : ThemeMode.System);
-        var matchLabel = new Label { AutoSize = false, Text = "Match system", TextAlign = ContentAlignment.MiddleRight, ForeColor = UiPalette.Text2, Font = UiFont.Px(11.5f), Size = Z(104, 42) };
+        var matchLabel = new Label { AutoSize = false, Text = "Match system", TextAlign = ContentAlignment.MiddleRight, ForeColor = UiPalette.Text2, Font = UiFont.Px(11.5f), Size = Z(104, 46) };
 
         var traySeg = new SegmentedToggle(new[] { "Bars", "Ring", "Minimal" }, (int)UiPalette.Tray) { Size = Z(156, 26) };
         traySeg.SelectionChanged += (_, _) => ApplyTrayStyle((TrayStyle)traySeg.SelectedIndex);
-        var trayLabel = new Label { AutoSize = false, Text = "Tray", TextAlign = ContentAlignment.MiddleRight, ForeColor = UiPalette.Text2, Font = UiFont.Px(11.5f), Size = Z(34, 42) };
+        var trayLabel = new Label { AutoSize = false, Text = "Tray", TextAlign = ContentAlignment.MiddleRight, ForeColor = UiPalette.Text2, Font = UiFont.Px(11.5f), Size = Z(34, 46) };
 
         title.Controls.Add(trayLabel);
         title.Controls.Add(traySeg);
@@ -530,10 +536,11 @@ internal sealed class SettingsForm : Form
             close.Location = new Point(w - S(46), 0);
             max.Location = new Point(w - S(92), 0);
             min.Location = new Point(w - S(138), 0);
-            segment.Location = new Point(w - S(138) - S(12) - segment.Width, (S(42) - segment.Height) / 2);
-            matchToggle.Location = new Point(segment.Left - S(12) - matchToggle.Width, (S(42) - matchToggle.Height) / 2);
+            var h = title.ClientSize.Height;
+            segment.Location = new Point(w - S(138) - S(12) - segment.Width, (h - segment.Height) / 2);
+            matchToggle.Location = new Point(segment.Left - S(12) - matchToggle.Width, (h - matchToggle.Height) / 2);
             matchLabel.Location = new Point(matchToggle.Left - matchLabel.Width - S(2), 0);
-            traySeg.Location = new Point(matchLabel.Left - S(14) - traySeg.Width, (S(42) - traySeg.Height) / 2);
+            traySeg.Location = new Point(matchLabel.Left - S(14) - traySeg.Width, (h - traySeg.Height) / 2);
             trayLabel.Location = new Point(traySeg.Left - trayLabel.Width - S(2), 0);
         }
 
@@ -569,7 +576,7 @@ internal sealed class SettingsForm : Form
             Font = UiFont.Px(11f, bold: true)
         });
 
-        var add = new RoundedButton("Add API") { Glyph = "plus", Dashed = true, Back = Color.Transparent, Foreground = UiPalette.Text2, Dock = DockStyle.Fill, Height = S(36) };
+        var add = new RoundedButton("Add API") { Glyph = "plus", Back = UiPalette.Control, Foreground = UiPalette.Text, Dock = DockStyle.Fill, Height = S(36), BorderColor = UiPalette.Border2 };
         add.Click += (_, _) =>
         {
             using var picker = new PresetPickerForm();
@@ -590,11 +597,11 @@ internal sealed class SettingsForm : Form
 
     private Control BuildFooter()
     {
-        var footer = new Panel { Dock = DockStyle.Fill, Height = S(54), BackColor = UiPalette.Titlebar };
+        var footer = new Panel { Dock = DockStyle.Fill, Height = S(56), BackColor = UiPalette.Titlebar };
         footer.Controls.Add(new Panel { Dock = DockStyle.Top, Height = S(1), BackColor = UiPalette.Border });
 
         footerStatus.Location = P(16, 1);
-        footerStatus.Size = Z(320, 53);
+        footerStatus.Size = Z(340, 55);
         footerStatus.Font = UiFont.Px(12.5f);
 
         var save = new RoundedButton("Save") { Accent = true, Size = Z(76, 32) };
@@ -628,8 +635,8 @@ internal sealed class SettingsForm : Form
         {
             var item = new ApiListItem(api, string.Equals(api.Id, selectedId, StringComparison.OrdinalIgnoreCase))
             {
-                Location = new Point(0, y),
-                Size = new Size(sidebarList.ClientSize.Width - S(8), S(52)),
+                Location = new Point(S(4), y),
+                Size = new Size(sidebarList.ClientSize.Width - S(16), S(52)),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
             };
             item.Click += (_, _) =>
@@ -655,12 +662,12 @@ internal sealed class SettingsForm : Form
             editor.SuspendLayout();
             editor.Controls.Clear();
             var api = SelectedApi();
-            var width = Math.Max(S(420), editor.ClientSize.Width - S(48) - SystemInformation.VerticalScrollBarWidth);
-            var y = S(22);
+            var width = Math.Max(S(420), editor.ClientSize.Width - S(48) - (editor.VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0));
+            var y = S(20);
 
             Section("Identity", ref y, width, Card(width,
                 Row("API name", null, TextField(api.DisplayName, v => { api.DisplayName = v; MarkDirty(); RenderSidebar(); }, 260)),
-                Row("Provider / service type", null, TextField(api.Provider ?? "", v => { api.Provider = v; MarkDirty(); }, 260)),
+                Row("Provider / service type", null, TextField(api.Provider ?? "", v => { api.Provider = v; MarkDirty(); }, 260, placeholder: "Optional")),
                 LogoRow(api)));
 
             Section("Appearance", ref y, width, Card(width,
@@ -671,7 +678,7 @@ internal sealed class SettingsForm : Form
 
             Section("Connection", ref y, width, Card(width,
                 ApiKeyRow(api),
-                Row("Usage endpoint URL", null, TextField(api.SourceUrl ?? "", v => { api.SourceUrl = v; MarkDirty(); }, 330, mono: true)),
+                Row("Usage endpoint URL", null, TextField(api.SourceUrl ?? "", v => { api.SourceUrl = v; MarkDirty(); }, 330, mono: true, placeholder: "https://api.example.com/usage")),
                 PollRow(api)));
 
             UsageLimits(api, ref y, width);
@@ -679,7 +686,7 @@ internal sealed class SettingsForm : Form
             var json = new RoundedButton("Open config JSON") { Glyph = "code", Bordered = false, Back = Color.Transparent, Foreground = UiPalette.Accent, GlyphColor = UiPalette.Accent, TextPx = 12.5f, Location = new Point(S(24), y), Size = Z(180, 26) };
             json.Click += (_, _) => new JsonPreviewForm(new TrayceConfig { Apis = apis.Select(Clone).ToList() }).ShowDialog(this);
             editor.Controls.Add(json);
-            y += S(46);
+            y += S(56);
 
             editor.AutoScrollMinSize = new Size(0, y);
         }
@@ -693,10 +700,10 @@ internal sealed class SettingsForm : Form
     private void Section(string title, ref int y, int width, Control card)
     {
         editor.Controls.Add(new Label { AutoSize = true, Location = new Point(S(24), y), Text = title, ForeColor = UiPalette.Text, Font = UiFont.Px(13f, bold: true) });
-        y += S(28);
+        y += S(24);
         card.Location = new Point(S(24), y);
         editor.Controls.Add(card);
-        y += card.Height + S(20);
+        y += card.Height + S(18);
     }
 
     private Control Card(int width, params Control[] rows)
@@ -722,16 +729,46 @@ internal sealed class SettingsForm : Form
     private Control Row(string title, string? subtitle, Control right)
     {
         var leftHeight = subtitle is null ? S(20) : S(38);
-        var height = Math.Max(right.Height, leftHeight) + S(26);
+        var height = Math.Max(right.Height, leftHeight) + S(subtitle is null ? 18 : 20);
         var row = new Panel { Height = height, BackColor = Color.Transparent };
-        row.Controls.Add(new Label { AutoSize = true, Location = P(15, 13), Text = title, ForeColor = UiPalette.Text, Font = UiFont.Px(13f) });
+        var titleLabel = new Label
+        {
+            AutoSize = false,
+            AutoEllipsis = true,
+            Location = P(16, subtitle is null ? 12 : 9),
+            Size = Z(250, 20),
+            Text = title,
+            ForeColor = UiPalette.Text,
+            Font = UiFont.Px(13f)
+        };
+        row.Controls.Add(titleLabel);
+        Label? subtitleLabel = null;
         if (subtitle is not null)
         {
-            row.Controls.Add(new Label { AutoSize = true, Location = P(15, 33), Text = subtitle, ForeColor = UiPalette.Text3, Font = UiFont.Px(11f) });
+            subtitleLabel = new Label
+            {
+                AutoSize = false,
+                AutoEllipsis = true,
+                Location = P(16, 29),
+                Size = Z(250, 16),
+                Text = subtitle,
+                ForeColor = UiPalette.Text3,
+                Font = UiFont.Px(11f)
+            };
+            row.Controls.Add(subtitleLabel);
         }
 
         right.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        void Place() => right.Location = new Point(row.Width - right.Width - S(15), (row.Height - right.Height) / 2);
+        void Place()
+        {
+            var maxLeft = row.Width - right.Width - S(16);
+            var preferred = S(290);
+            var left = Math.Max(S(210), Math.Min(maxLeft, preferred));
+            right.Location = new Point(left, (row.Height - right.Height) / 2);
+            var labelWidth = Math.Max(S(150), right.Left - titleLabel.Left - S(24));
+            titleLabel.Width = labelWidth;
+            if (subtitleLabel is not null) subtitleLabel.Width = labelWidth;
+        }
         row.Controls.Add(right);
         row.Resize += (_, _) => Place();
         Place();
@@ -740,7 +777,7 @@ internal sealed class SettingsForm : Form
 
     private Control LogoRow(ApiConfig api)
     {
-        var wrap = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoSize = true, BackColor = Color.Transparent };
+        var wrap = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = false, BackColor = Color.Transparent, Size = Z(258, 35) };
         wrap.Controls.Add(new LogoBadge(api) { Size = Z(34, 34), Radius = 8, Margin = G(0, 0, 10, 0) });
         var initials = TextField(api.LogoText ?? Logo.Initials(api.DisplayName), v => { api.LogoText = v[..Math.Min(3, v.Length)]; MarkDirty(); RenderSidebar(); }, 54, centered: true);
         initials.Margin = G(0, 0, 10, 0);
@@ -753,10 +790,10 @@ internal sealed class SettingsForm : Form
 
     private Control BrandRow(ApiConfig api)
     {
-        var wrap = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoSize = true, BackColor = Color.Transparent };
+        var wrap = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = false, BackColor = Color.Transparent, Size = Z(130, 30) };
         wrap.Controls.Add(new ColorSwatch(BrandColor(api)) { Size = Z(24, 24), Margin = G(0, 3, 9, 0) });
         wrap.Controls.Add(new Label { Text = BrandColor(api), AutoSize = false, Size = Z(96, 30), TextAlign = ContentAlignment.MiddleLeft, ForeColor = UiPalette.Text2, Font = UiFont.Px(12.5f, mono: true) });
-        return Row("Brand color", "Provided default for " + api.DisplayName, wrap);
+        return Row("Brand color", "Default for this provider", wrap);
     }
 
     private Control ToggleRow(ApiConfig api)
@@ -794,7 +831,7 @@ internal sealed class SettingsForm : Form
 
     private Control ApiKeyRow(ApiConfig api)
     {
-        var wrap = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoSize = true, BackColor = Color.Transparent };
+        var wrap = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = false, BackColor = Color.Transparent, Size = Z(294, 31) };
         var key = TextField(api.ApiKey ?? "", v => { api.ApiKey = v; MarkDirty(); }, 220, mono: true);
         key.Password = !revealKey;
         key.Margin = G(0, 0, 6, 0);
@@ -811,7 +848,7 @@ internal sealed class SettingsForm : Form
     private Control PollRow(ApiConfig api)
     {
         var parts = PollParts(api.PollSeconds);
-        var wrap = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoSize = true, BackColor = Color.Transparent };
+        var wrap = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = false, BackColor = Color.Transparent, Size = Z(282, 31) };
         var seconds = new Label { AutoSize = false, Size = Z(78, 31), TextAlign = ContentAlignment.MiddleLeft, Text = "= " + api.PollSeconds + " s", ForeColor = UiPalette.Text3, Font = UiFont.Px(12f), Margin = G(9, 0, 0, 0) };
         var num = TextField(parts.Number.ToString(), v =>
         {
@@ -913,10 +950,11 @@ internal sealed class SettingsForm : Form
         return wrap;
     }
 
-    private RoundedTextBox TextField(string value, Action<string> set, int width = 260, bool mono = false, bool centered = false, bool scaledWidth = false)
+    private RoundedTextBox TextField(string value, Action<string> set, int width = 260, bool mono = false, bool centered = false, bool scaledWidth = false, string? placeholder = null)
     {
         var field = new RoundedTextBox(mono: mono, centered: centered) { Size = new Size(scaledWidth ? width : S(width), S(31)) };
         field.Text = value;
+        if (placeholder is not null) field.Placeholder = placeholder;
         field.Edited += (_, _) => { if (!rendering) set(field.Text); };
         return field;
     }
@@ -1006,8 +1044,8 @@ internal sealed class SettingsForm : Form
 
     private void UpdateFooter()
     {
-        footerStatus.Text = saved ? "All changes saved" : dirty ? "Unsaved changes" : "No changes";
-        footerStatus.ForeColor = saved ? UiPalette.Ok : dirty ? UiPalette.Text2 : UiPalette.Text3;
+        footerStatus.Text = saved ? "All changes saved" : dirty ? "Unsaved changes" : "No unsaved changes";
+        footerStatus.ForeColor = saved ? UiPalette.Ok : dirty ? UiPalette.Text2 : UiPalette.Text2;
         footerStatus.Image = saved ? IconPainter.Bitmap("check", UiPalette.Ok) : null;
         footerStatus.ImageAlign = ContentAlignment.MiddleLeft;
         footerStatus.TextAlign = ContentAlignment.MiddleLeft;
