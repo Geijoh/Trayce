@@ -694,11 +694,13 @@ internal static class IconPainter
         switch (glyph)
         {
             case "refresh":
-                // two opposing curved arrows (circular sync)
-                g.DrawArc(pen, l + 2f, t + 2f, w - 4f, h - 4f, 300, 150);
-                g.DrawArc(pen, l + 2f, t + 2f, w - 4f, h - 4f, 120, 150);
-                g.DrawLines(pen, new[] { new PointF(r - 5, t + 1.5f), new PointF(r - 1.5f, t + 3.5f), new PointF(r - 3.5f, t + 7) });
-                g.DrawLines(pen, new[] { new PointF(l + 5, b - 1.5f), new PointF(l + 1.5f, b - 3.5f), new PointF(l + 3.5f, b - 7) });
+                PointF p(float x, float y) => new(l + x / 24f * w, t + y / 24f * h);
+                g.DrawBezier(pen, p(3.5f, 9), p(6f, 4.4f), p(12.6f, 2.2f), p(18.4f, 5.6f));
+                g.DrawLine(pen, p(23, 4), p(23, 10));
+                g.DrawLine(pen, p(23, 10), p(17, 10));
+                g.DrawBezier(pen, p(20.5f, 15), p(18f, 19.6f), p(11.4f, 21.8f), p(5.6f, 18.4f));
+                g.DrawLine(pen, p(1, 20), p(1, 14));
+                g.DrawLine(pen, p(1, 14), p(7, 14));
                 break;
             case "details":
                 g.DrawLine(pen, l + 3, b - 3, r - 3, t + 3);
@@ -829,7 +831,7 @@ internal sealed class DetailsForm : Form
         var root = new Panel { Dock = DockStyle.Fill, Padding = Padding.Empty, BackColor = UiPalette.Flyout };
 
         var titleWidth = contentWidth - S(36) - S(12) - (onRefresh is null ? 0 : S(40));
-        var badge = new LogoBadge(api) { Location = new Point(pad, S(16)), Size = new Size(S(36), S(36)), Radius = 9 };
+        var badge = new LogoBadge(api) { Location = new Point(pad, S(16)), Size = new Size(S(36), S(36)), Radius = 9, LogoInset = 3 };
         var title = new Label
         {
             AutoSize = false,
@@ -989,6 +991,7 @@ internal sealed class LogoBadge : Control
     private readonly ApiConfig api;
 
     public int Radius { get; set; } = 8;
+    public int LogoInset { get; set; } = 5;
     public Color? Fallback { get; set; }
 
     public LogoBadge(ApiConfig api)
@@ -1009,7 +1012,7 @@ internal sealed class LogoBadge : Control
         var logoPath = ConfigStore.ResolvePath(api.LogoPath);
         if (logoPath is not null && File.Exists(logoPath))
         {
-            var inset = Dpi.Scale(this, Width <= 36 ? 7 : 9);
+            var inset = Dpi.Scale(this, LogoInset);
             Logo.Draw(g, api, new Rectangle(inset, inset, Width - (inset * 2), Height - (inset * 2)), Color.White, small: false);
             return;
         }
@@ -2511,6 +2514,10 @@ internal static class SelfTest
         var usage = new UsageSnapshot { Tokens = 900, TokenLimit = 1000 };
         Check(UsageMath.Ratio(usage) == 0.9m, "ratio");
         Check(UsageMath.Badge(usage, stale: false) == "90", "badge");
+        using (var path = UiPalette.RoundPath(new Rectangle(0, 0, 100, 7), 6))
+        {
+            Check(path.GetBounds().Height <= 7.1f, "rounded path clamps radius");
+        }
 
         using var icon = IconRenderer.Render(api, usage, stale: false);
         Check(icon.Width > 0 && icon.Height > 0, "icon");

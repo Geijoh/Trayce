@@ -235,7 +235,7 @@ internal static class UiPalette
     public static GraphicsPath RoundPath(Rectangle rect, int radius)
     {
         var path = new GraphicsPath();
-        var d = Math.Max(1, radius * 2);
+        var d = Math.Max(1, Math.Min(radius * 2, Math.Min(rect.Width, rect.Height)));
         path.AddArc(rect.Left, rect.Top, d, d, 180, 90);
         path.AddArc(rect.Right - d, rect.Top, d, d, 270, 90);
         path.AddArc(rect.Right - d, rect.Bottom - d, d, d, 0, 90);
@@ -247,7 +247,7 @@ internal static class UiPalette
     private static GraphicsPath RoundPath(RectangleF rect, float radius)
     {
         var path = new GraphicsPath();
-        var d = Math.Max(1f, radius * 2f);
+        var d = Math.Max(1f, Math.Min(radius * 2f, Math.Min(rect.Width, rect.Height)));
         path.AddArc(rect.Left, rect.Top, d, d, 180, 90);
         path.AddArc(rect.Right - d, rect.Top, d, d, 270, 90);
         path.AddArc(rect.Right - d, rect.Bottom - d, d, d, 0, 90);
