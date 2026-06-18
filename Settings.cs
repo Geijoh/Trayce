@@ -229,12 +229,12 @@ internal sealed class ColorField : Control
         using (var back = new SolidBrush(hover && Enabled ? UiPalette.ControlHover : UiPalette.Control)) UiPalette.FillRound(g, back, rect, Dpi.Scale(this, 6));
         using (var border = new Pen(Enabled ? UiPalette.Border2 : UiPalette.Border)) UiPalette.DrawRound(g, border, rect, Dpi.Scale(this, 6));
 
-        var sw = Dpi.Scale(this, 21);
+        var sw = Dpi.Scale(this, 24);
         var swatch = new Rectangle(Dpi.Scale(this, 5), (Height - sw) / 2, sw, sw);
         Color color;
         try { color = ColorTranslator.FromHtml(hex); } catch { color = UiPalette.Accent2; }
-        using (var fill = new SolidBrush(Enabled ? color : Color.FromArgb(140, color))) UiPalette.FillRound(g, fill, swatch, Dpi.Scale(this, 5));
-        using (var border = new Pen(UiPalette.Border2)) UiPalette.DrawRound(g, border, swatch, Dpi.Scale(this, 5));
+        using (var fill = new SolidBrush(Enabled ? color : Color.FromArgb(140, color))) UiPalette.FillRound(g, fill, swatch, Dpi.Scale(this, 6));
+        using (var border = new Pen(UiPalette.Border2)) UiPalette.DrawRound(g, border, swatch, Dpi.Scale(this, 6));
 
         using var text = new SolidBrush(Enabled ? UiPalette.Text : UiPalette.Text3);
         var font = UiFont.Px(12.5f, mono: true);
@@ -567,9 +567,9 @@ internal sealed class SettingsForm : Form
 
         var shell = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = UiPalette.Bg, ColumnCount = 1, RowCount = 3 };
         shell.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        shell.RowStyles.Add(new RowStyle(SizeType.Absolute, S(46)));
+        shell.RowStyles.Add(new RowStyle(SizeType.Absolute, S(42)));
         shell.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        shell.RowStyles.Add(new RowStyle(SizeType.Absolute, S(56)));
+        shell.RowStyles.Add(new RowStyle(SizeType.Absolute, S(54)));
         shell.Controls.Add(BuildTitleBar(), 0, 0);
         shell.Controls.Add(body, 0, 1);
         shell.Controls.Add(BuildFooter(), 0, 2);
@@ -578,7 +578,7 @@ internal sealed class SettingsForm : Form
 
     private Control BuildTitleBar()
     {
-        var title = new Panel { Dock = DockStyle.Fill, Height = S(46), BackColor = UiPalette.Titlebar };
+        var title = new Panel { Dock = DockStyle.Fill, Height = S(42), BackColor = UiPalette.Titlebar };
         title.MouseDown += (_, e) => { if (e.Button == MouseButtons.Left) NativeChrome.DragWindow(Handle); };
 
         title.Controls.Add(new AppMark { Location = P(14, 12), Size = Z(18, 18) });
@@ -586,18 +586,18 @@ internal sealed class SettingsForm : Form
         {
             AutoSize = false,
             Location = P(41, 0),
-            Size = Z(168, 46),
+            Size = Z(168, 42),
             Text = "Trayce — Settings",
             TextAlign = ContentAlignment.MiddleLeft,
             ForeColor = UiPalette.Text2,
             Font = UiFont.Px(12.5f)
         });
 
-        var close = new TitleGlyphButton("close") { Size = Z(46, 46) };
+        var close = new TitleGlyphButton("close") { Size = Z(42, 42) };
         close.Click += (_, _) => Close();
-        var max = new TitleGlyphButton("max") { Size = Z(46, 46) };
+        var max = new TitleGlyphButton("max") { Size = Z(42, 42) };
         max.Click += (_, _) => WindowState = WindowState == FormWindowState.Maximized ? FormWindowState.Normal : FormWindowState.Maximized;
-        var min = new TitleGlyphButton("min") { Size = Z(46, 46) };
+        var min = new TitleGlyphButton("min") { Size = Z(42, 42) };
         min.Click += (_, _) => WindowState = FormWindowState.Minimized;
 
         // theme cluster (mirrors the prototype's floating Light/Dark toggle + a Match-system switch)
@@ -606,13 +606,13 @@ internal sealed class SettingsForm : Form
         segment.SelectionChanged += (_, _) => ApplyTheme(segment.SelectedIndex == 0 ? ThemeMode.Light : ThemeMode.Dark);
         var matchToggle = new ToggleSwitch(matchOn) { Size = Z(34, 18) };
         matchToggle.Click += (_, _) => ApplyTheme(UiPalette.Mode == ThemeMode.System ? (UiPalette.IsDark ? ThemeMode.Dark : ThemeMode.Light) : ThemeMode.System);
-        var matchLabel = new Label { AutoSize = false, Text = "Match system", TextAlign = ContentAlignment.MiddleRight, ForeColor = UiPalette.Text2, Font = UiFont.Px(11.5f), Size = Z(104, 46) };
+        var matchLabel = new Label { AutoSize = false, Text = "Match system", TextAlign = ContentAlignment.MiddleRight, ForeColor = UiPalette.Text2, Font = UiFont.Px(11.5f), Size = Z(104, 42) };
         var about = new RoundedButton("About") { Glyph = "info", Size = Z(84, 28), TextPx = 12f, Back = UiPalette.Control, Foreground = UiPalette.Text2, BorderColor = UiPalette.Border2 };
         about.Click += (_, _) => new AboutForm().ShowDialog(this);
 
         var traySeg = new SegmentedToggle(new[] { "Bars", "Ring", "Minimal" }, (int)UiPalette.Tray) { Size = Z(156, 26) };
         traySeg.SelectionChanged += (_, _) => ApplyTrayStyle((TrayStyle)traySeg.SelectedIndex);
-        var trayLabel = new Label { AutoSize = false, Text = "Tray", TextAlign = ContentAlignment.MiddleRight, ForeColor = UiPalette.Text2, Font = UiFont.Px(11.5f), Size = Z(34, 46) };
+        var trayLabel = new Label { AutoSize = false, Text = "Tray", TextAlign = ContentAlignment.MiddleRight, ForeColor = UiPalette.Text2, Font = UiFont.Px(11.5f), Size = Z(34, 42) };
 
         title.Controls.Add(trayLabel);
         title.Controls.Add(traySeg);
@@ -629,11 +629,11 @@ internal sealed class SettingsForm : Form
         {
             var w = title.ClientSize.Width;
             if (w <= 0) return;
-            close.Location = new Point(w - S(46), 0);
-            max.Location = new Point(w - S(92), 0);
-            min.Location = new Point(w - S(138), 0);
+            close.Location = new Point(w - S(42), 0);
+            max.Location = new Point(w - S(84), 0);
+            min.Location = new Point(w - S(126), 0);
             var h = title.ClientSize.Height;
-            segment.Location = new Point(w - S(138) - S(12) - segment.Width, (h - segment.Height) / 2);
+            segment.Location = new Point(w - S(126) - S(12) - segment.Width, (h - segment.Height) / 2);
             matchToggle.Location = new Point(segment.Left - S(12) - matchToggle.Width, (h - matchToggle.Height) / 2);
             matchLabel.Location = new Point(matchToggle.Left - matchLabel.Width - S(2), 0);
             about.Visible = w >= S(920);
@@ -663,7 +663,7 @@ internal sealed class SettingsForm : Form
 
     private Control BuildSidebar()
     {
-        var sidebar = new Panel { Dock = DockStyle.Left, Width = S(286), BackColor = UiPalette.Bg2 };
+        var sidebar = new Panel { Dock = DockStyle.Left, Width = S(282), BackColor = UiPalette.Bg2 };
         sidebar.Controls.Add(sidebarList);
         sidebar.Controls.Add(new Label
         {
@@ -687,7 +687,7 @@ internal sealed class SettingsForm : Form
             RenderSidebar();
             RenderEditor();
         };
-        var addWrap = new Panel { Dock = DockStyle.Bottom, Height = S(56), Padding = G(12, 8, 12, 12), BackColor = UiPalette.Bg2 };
+        var addWrap = new Panel { Dock = DockStyle.Bottom, Height = S(54), Padding = G(12, 8, 12, 10), BackColor = UiPalette.Bg2 };
         addWrap.Controls.Add(add);
         sidebar.Controls.Add(addWrap);
         sidebar.Controls.Add(new Panel { Dock = DockStyle.Right, Width = S(1), BackColor = UiPalette.Border });
@@ -696,7 +696,7 @@ internal sealed class SettingsForm : Form
 
     private Control BuildFooter()
     {
-        var footer = new Panel { Dock = DockStyle.Fill, Height = S(56), BackColor = UiPalette.Titlebar };
+        var footer = new Panel { Dock = DockStyle.Fill, Height = S(54), BackColor = UiPalette.Titlebar };
         footer.Controls.Add(new Panel { Dock = DockStyle.Top, Height = S(1), BackColor = UiPalette.Border });
 
         footerStatus.Location = P(16, 1);
@@ -836,13 +836,13 @@ internal sealed class SettingsForm : Form
     private Control Row(string title, string? subtitle, Control right, bool muted = false)
     {
         var leftHeight = subtitle is null ? S(20) : S(38);
-        var height = Math.Max(right.Height, leftHeight) + S(subtitle is null ? 18 : 20);
+        var height = Math.Max(right.Height, leftHeight) + S(subtitle is null ? 26 : 20);
         var row = new Panel { Height = height, BackColor = Color.Transparent };
         var titleLabel = new Label
         {
             AutoSize = false,
             AutoEllipsis = true,
-            Location = P(16, subtitle is null ? 12 : 9),
+            Location = new Point(S(16), subtitle is null ? (height - S(20)) / 2 : S(9)),
             Size = Z(250, 20),
             Text = title,
             ForeColor = muted ? UiPalette.Text3 : UiPalette.Text,

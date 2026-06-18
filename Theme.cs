@@ -218,6 +218,13 @@ internal static class UiPalette
         g.FillPath(brush, path);
     }
 
+    public static void FillRound(Graphics g, Brush brush, RectangleF rect, float radius)
+    {
+        if (rect.Width <= 0 || rect.Height <= 0) return;
+        using var path = RoundPath(rect, radius);
+        g.FillPath(brush, path);
+    }
+
     public static void DrawRound(Graphics g, Pen pen, Rectangle rect, int radius)
     {
         if (rect.Width <= 0 || rect.Height <= 0) return;
@@ -229,6 +236,18 @@ internal static class UiPalette
     {
         var path = new GraphicsPath();
         var d = Math.Max(1, radius * 2);
+        path.AddArc(rect.Left, rect.Top, d, d, 180, 90);
+        path.AddArc(rect.Right - d, rect.Top, d, d, 270, 90);
+        path.AddArc(rect.Right - d, rect.Bottom - d, d, d, 0, 90);
+        path.AddArc(rect.Left, rect.Bottom - d, d, d, 90, 90);
+        path.CloseFigure();
+        return path;
+    }
+
+    private static GraphicsPath RoundPath(RectangleF rect, float radius)
+    {
+        var path = new GraphicsPath();
+        var d = Math.Max(1f, radius * 2f);
         path.AddArc(rect.Left, rect.Top, d, d, 180, 90);
         path.AddArc(rect.Right - d, rect.Top, d, d, 270, 90);
         path.AddArc(rect.Right - d, rect.Bottom - d, d, d, 0, 90);

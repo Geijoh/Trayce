@@ -397,7 +397,7 @@ internal static class IconRenderer
 
         if (stale)
         {
-            var dot = new Rectangle(badge.Right - 5, badge.Top - 2, 8, 8);
+            var dot = new Rectangle(badge.Right - 5, badge.Top - 3, 8, 8);
             using var border = new SolidBrush(UiPalette.TaskbarSolid);
             using var fill = new SolidBrush(StatusInfo.For(stale, usage.Message).Color);
             g.FillEllipse(border, dot.X - 1, dot.Y - 1, dot.Width + 2, dot.Height + 2);
@@ -424,14 +424,17 @@ internal static class IconRenderer
 
         var ratios = UsageMath.Ratios(usage).Take(2).ToList();
         if (ratios.Count == 0) ratios.Add(UsageMath.Ratio(usage) ?? 0m);
-        const int barWidth = 16;
+        const float barWidth = 16f;
+        const float barHeight = 2.5f;
         var barX = badge.Left + (badge.Width - barWidth) / 2;
-        var y = badge.Bottom + 2;
+        var y = badge.Bottom + 2.5f;
+        using var track = new SolidBrush(Color.FromArgb(38, Color.White));
         foreach (var ratio in ratios)
         {
-            var fillWidth = Math.Max(2, (int)Math.Round(barWidth * Math.Clamp(ratio, 0m, 1m)));
+            var fillWidth = Math.Max(2f, barWidth * (float)Math.Clamp(ratio, 0m, 1m));
             using var fill = new SolidBrush(UsageMath.ColorForRatio(ratio));
-            UiPalette.FillRound(g, fill, new Rectangle(barX, y, fillWidth, 2), 1);
+            UiPalette.FillRound(g, track, new RectangleF(barX, y, barWidth, barHeight), 1.5f);
+            if (ratio > 0m) UiPalette.FillRound(g, fill, new RectangleF(barX, y, fillWidth, barHeight), 1.5f);
             y += 4;
         }
 
@@ -445,9 +448,11 @@ internal static class IconRenderer
         DrawBadgeMark(g, api, badge);
 
         var ratio = UsageMath.Ratio(usage) ?? 0m;
-        var fillWidth = Math.Max(2, (int)Math.Round(22 * Math.Clamp(ratio, 0m, 1m)));
+        var fillWidth = Math.Max(2f, 22f * (float)Math.Clamp(ratio, 0m, 1m));
+        using var track = new SolidBrush(Color.FromArgb(38, Color.White));
         using var fill = new SolidBrush(UsageMath.ColorForRatio(ratio));
-        UiPalette.FillRound(g, fill, new Rectangle(badge.Left, badge.Bottom + 3, fillWidth, 2), 1);
+        UiPalette.FillRound(g, track, new RectangleF(badge.Left, badge.Bottom + 3, 22, 3), 1.5f);
+        if (ratio > 0m) UiPalette.FillRound(g, fill, new RectangleF(badge.Left, badge.Bottom + 3, fillWidth, 3), 1.5f);
         return badge;
     }
 
@@ -473,7 +478,8 @@ internal static class IconRenderer
         var logoPath = ConfigStore.ResolvePath(api.LogoPath);
         if (logoPath is not null && File.Exists(logoPath))
         {
-            Logo.Draw(g, api, Rectangle.Inflate(badge, -4, -4), Color.White, small: true);
+            var inset = badge.Width <= 19 ? 3 : 4;
+            Logo.Draw(g, api, Rectangle.Inflate(badge, -inset, -inset), Color.White, small: true);
             return;
         }
 
@@ -486,11 +492,13 @@ internal static class IconRenderer
             badge.Left + (badge.Width - measured.Width) / 2f,
             badge.Top + (badge.Height - measured.Height) / 2f);
     }
+
 }
 
 internal static class Dpi
 {
     public static int Scale(Control control, int value) => (int)Math.Round(value * control.DeviceDpi / 96.0);
+    public static float Scale(Control control, float value) => value * control.DeviceDpi / 96f;
     public static Rectangle Rect(Control control, int x, int y, int width, int height) => new(Scale(control, x), Scale(control, y), Scale(control, width), Scale(control, height));
 }
 
@@ -894,18 +902,14 @@ internal sealed class DetailsForm : Form
         {
             top += S(12);
             root.Controls.Add(new Panel { BackColor = UiPalette.Border, Location = new Point(0, top), Size = new Size(formWidth, S(1)) });
-            var manage = new Button
+            var manage = new RoundedButton("Manage in Settings")
             {
-                Text = "Manage in Settings",
-                FlatStyle = FlatStyle.Flat,
-                BackColor = UiPalette.Accent2,
-                ForeColor = Color.White,
-                Font = new Font("Segoe UI", 9.4F, FontStyle.Bold),
+                Accent = true,
+                Radius = 7,
+                TextPx = 12.5f,
                 Location = new Point(pad, top + S(14)),
                 Size = new Size(contentWidth, S(33)),
-                Cursor = Cursors.Hand
             };
-            manage.FlatAppearance.BorderSize = 0;
             manage.Click += (_, _) =>
             {
                 Close();
@@ -1916,8 +1920,12 @@ internal sealed class TrayPreview : Control
         UiPalette.FillRound(e.Graphics, color, badge, Dpi.Scale(this, 5));
         Logo.Draw(e.Graphics, api, Rectangle.Inflate(badge, -Dpi.Scale(this, 4), -Dpi.Scale(this, 4)), Color.White, small: true);
         using var accent = new SolidBrush(UiPalette.Accent);
-        e.Graphics.FillRectangle(accent, Width - Dpi.Scale(this, 29), Dpi.Scale(this, 28), Dpi.Scale(this, 13), Dpi.Scale(this, 2));
-        e.Graphics.FillRectangle(accent, Width - Dpi.Scale(this, 29), Dpi.Scale(this, 32), Dpi.Scale(this, 9), Dpi.Scale(this, 2));
+        using var track = new SolidBrush(Color.FromArgb(38, Color.White));
+        var x = Width - Dpi.Scale(this, 29);
+        UiPalette.FillRound(e.Graphics, track, new RectangleF(x, Dpi.Scale(this, 28), Dpi.Scale(this, 16), Dpi.Scale(this, 2.5f)), Dpi.Scale(this, 1.5f));
+        UiPalette.FillRound(e.Graphics, accent, new RectangleF(x, Dpi.Scale(this, 28), Dpi.Scale(this, 13), Dpi.Scale(this, 2.5f)), Dpi.Scale(this, 1.5f));
+        UiPalette.FillRound(e.Graphics, track, new RectangleF(x, Dpi.Scale(this, 32), Dpi.Scale(this, 16), Dpi.Scale(this, 2.5f)), Dpi.Scale(this, 1.5f));
+        UiPalette.FillRound(e.Graphics, accent, new RectangleF(x, Dpi.Scale(this, 32), Dpi.Scale(this, 9), Dpi.Scale(this, 2.5f)), Dpi.Scale(this, 1.5f));
     }
 }
 

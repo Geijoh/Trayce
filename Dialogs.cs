@@ -414,8 +414,8 @@ internal sealed class PresetPickerForm : Form
             Font = UiFont.Px(12.5f)
         });
 
-        var grid = new FlowLayoutPanel { Location = new Point(18, 78), Size = new Size(572, 360), FlowDirection = FlowDirection.LeftToRight, WrapContents = true, BackColor = Color.Transparent };
-        foreach (var preset in Presets) grid.Controls.Add(Card(preset));
+        var grid = new FlowLayoutPanel { Location = new Point(20, 78), Size = new Size(568, 360), FlowDirection = FlowDirection.LeftToRight, WrapContents = true, BackColor = Color.Transparent };
+        for (var i = 0; i < Presets.Length; i++) grid.Controls.Add(Card(Presets[i], i));
         Controls.Add(grid);
 
         var footer = new Panel { Location = new Point(0, 444), Size = new Size(ClientSize.Width, 56), BackColor = UiPalette.Bg2 };
@@ -431,9 +431,9 @@ internal sealed class PresetPickerForm : Form
         KeyDown += (_, e) => { if (e.KeyCode == Keys.Escape) Close(); };
     }
 
-    private Control Card(ApiPreset preset)
+    private Control Card(ApiPreset preset, int index)
     {
-        var card = new Panel { Size = new Size(180, 52), Margin = new Padding(0, 0, 8, 8), Cursor = Cursors.Hand, BackColor = Color.Transparent };
+        var card = new Panel { Size = new Size(184, 52), Margin = new Padding(0, 0, index % 3 == 2 ? 0 : 8, 8), Cursor = Cursors.Hand, BackColor = Color.Transparent };
         card.Click += (_, _) => { Preset = preset; DialogResult = DialogResult.OK; Close(); };
         card.Paint += (_, e) =>
         {
