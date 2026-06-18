@@ -1,12 +1,16 @@
 # Trayce
 
+---
+
+![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/Geijoh/Trayce/total)
+
 Lightweight Windows tray utility for watching API usage at a glance.
 
 Current build: self-contained .NET 8 Windows tray app with one tray icon per configured API, custom brand/logo marks, automatic bundled logo matching, stacked usage windows, light/dark themes, and per-monitor DPI-aware rendering.
 
 Trayce can show static usage from local config or refresh live JSON from each API's configured `sourceUrl`. The tray icon shows a rounded brand badge with up to two tiny health bars; hover, left-click, and right-click reveal progressively more detail.
 
-[Download latest build](https://github.com/Geijoh/Trayce/releases/latest) ![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/Geijoh/Trayce/total) - [Privacy policy](PRIVACY.md)
+[Download latest build](https://github.com/Geijoh/Trayce/releases/latest) - [Privacy policy](PRIVACY.md)
 
 ## Creation Note
 
