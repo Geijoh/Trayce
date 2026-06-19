@@ -24,6 +24,8 @@ internal static class UiFont
 /// <summary>A text input with a rounded border that tracks focus, wrapping a borderless TextBox.</summary>
 internal sealed class RoundedTextBox : Control
 {
+    internal static bool SnapshotMode { get; set; }
+
     public TextBox Box { get; }
     public event EventHandler? Edited;
 
@@ -69,6 +71,21 @@ internal sealed class RoundedTextBox : Control
         var rect = new Rectangle(0, 0, Width - 1, Height - 1);
         UiPalette.FillRound(g, back, rect, Dpi.Scale(this, 6));
         UiPalette.DrawRound(g, border, rect, Dpi.Scale(this, 6));
+
+        if (!SnapshotMode) return;
+
+        var value = Text;
+        var isPlaceholder = string.IsNullOrWhiteSpace(value) && !string.IsNullOrWhiteSpace(Placeholder);
+        if (isPlaceholder) value = Placeholder;
+        if (Password && !isPlaceholder) value = new string('*', value.Length);
+
+        var flags = TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis;
+        if (Box.TextAlign == HorizontalAlignment.Center) flags |= TextFormatFlags.HorizontalCenter;
+        else if (Box.TextAlign == HorizontalAlignment.Right) flags |= TextFormatFlags.Right;
+        else flags |= TextFormatFlags.Left;
+
+        var textRect = new Rectangle(Dpi.Scale(this, 11), 0, Math.Max(1, Width - Dpi.Scale(this, 22)), Height);
+        TextRenderer.DrawText(g, value, Box.Font, textRect, isPlaceholder ? UiPalette.Text3 : UiPalette.Text, flags);
     }
 }
 
@@ -201,6 +218,109 @@ internal sealed class SegmentedToggle : Control
     }
 }
 
+internal sealed class SelectBox : Control
+{
+    private readonly string[] options;
+    private bool hover;
+    private int selectedIndex;
+
+    public event EventHandler? SelectedIndexChanged;
+
+    public int SelectedIndex
+    {
+        get => selectedIndex;
+        private set
+        {
+            var next = Math.Clamp(value, 0, Math.Max(0, options.Length - 1));
+            if (next == selectedIndex) return;
+            selectedIndex = next;
+            Invalidate();
+            SelectedIndexChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.AllowNull]
+    public override string Text
+    {
+        get => options.Length == 0 ? "" : options[selectedIndex];
+        set
+        {
+            var next = Array.FindIndex(options, item => string.Equals(item, value, StringComparison.OrdinalIgnoreCase));
+            SelectedIndex = next >= 0 ? next : 0;
+        }
+    }
+
+    public SelectBox(IEnumerable<string> items, string selected)
+    {
+        options = items.ToArray();
+        selectedIndex = Math.Max(0, Array.FindIndex(options, item => string.Equals(item, selected, StringComparison.OrdinalIgnoreCase)));
+        DoubleBuffered = true;
+        Cursor = Cursors.Hand;
+        Height = 31;
+    }
+
+    protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
+    protected override void OnMouseLeave(EventArgs e) { hover = false; Invalidate(); base.OnMouseLeave(e); }
+    protected override void OnMouseDown(MouseEventArgs e)
+    {
+        base.OnMouseDown(e);
+        if (e.Button == MouseButtons.Left && Enabled) ShowMenu();
+    }
+
+    private void ShowMenu()
+    {
+        var menu = new ContextMenuStrip
+        {
+            ShowImageMargin = false,
+            BackColor = UiPalette.Menu,
+            ForeColor = UiPalette.Text,
+            Font = UiFont.Px(12.5f),
+            Padding = Padding.Empty
+        };
+        menu.Closed += (_, _) => menu.Dispose();
+        for (var i = 0; i < options.Length; i++)
+        {
+            var index = i;
+            var item = new ToolStripMenuItem(options[i]) { Checked = index == selectedIndex };
+            item.Click += (_, _) => SelectedIndex = index;
+            menu.Items.Add(item);
+        }
+        menu.Show(this, new Point(0, Height + 2));
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+        g.Clear(UiPalette.Backdrop(this, UiPalette.Card));
+
+        var rect = new Rectangle(0, 0, Width - 1, Height - 1);
+        using (var back = new SolidBrush(hover && Enabled ? UiPalette.ControlHover : UiPalette.Control)) UiPalette.FillRound(g, back, rect, Dpi.Scale(this, 6));
+        using (var border = new Pen(Enabled ? UiPalette.Border2 : UiPalette.Border)) UiPalette.DrawRound(g, border, rect, Dpi.Scale(this, 6));
+
+        var font = UiFont.Px(12.5f);
+        using var text = new SolidBrush(Enabled ? UiPalette.Text : UiPalette.Text3);
+        var textRect = new RectangleF(Dpi.Scale(this, 10), 0, Math.Max(1, Width - Dpi.Scale(this, 34)), Height);
+        using var format = new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
+        g.DrawString(Text, font, text, textRect, format);
+
+        var cx = Width - Dpi.Scale(this, 15);
+        var cy = Height / 2 + Dpi.Scale(this, 1);
+        using var chevron = new Pen(Enabled ? UiPalette.Text3 : UiPalette.Border2, Dpi.Scale(this, 1.6f))
+        {
+            StartCap = LineCap.Round,
+            EndCap = LineCap.Round
+        };
+        g.DrawLines(chevron, new[]
+        {
+            new Point(cx - Dpi.Scale(this, 4), cy - Dpi.Scale(this, 2)),
+            new Point(cx, cy + Dpi.Scale(this, 2)),
+            new Point(cx + Dpi.Scale(this, 4), cy - Dpi.Scale(this, 2))
+        });
+    }
+}
+
 /// <summary>A rounded swatch + hex field that opens the color picker on click.</summary>
 internal sealed class ColorField : Control
 {
@@ -241,6 +361,101 @@ internal sealed class ColorField : Control
         var size = g.MeasureString(hex, font);
         g.DrawString(hex, font, text, swatch.Right + Dpi.Scale(this, 7), (Height - size.Height) / 2f);
     }
+}
+
+/// <summary>Compact percentage slider used by the Appearance rows.</summary>
+internal sealed class PercentSlider : Control
+{
+    private bool dragging;
+    private bool hover;
+    private int value;
+
+    public event Action<int>? ValueChanged;
+
+    public int Value
+    {
+        get => value;
+        set
+        {
+            var next = Math.Clamp(value, 0, 100);
+            if (this.value == next) return;
+            this.value = next;
+            Invalidate();
+        }
+    }
+
+    public PercentSlider(int value)
+    {
+        this.value = Math.Clamp(value, 0, 100);
+        DoubleBuffered = true;
+        Cursor = Cursors.Hand;
+        Size = new Size(148, 31);
+    }
+
+    protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
+    protected override void OnMouseLeave(EventArgs e) { hover = false; Invalidate(); base.OnMouseLeave(e); }
+    protected override void OnMouseDown(MouseEventArgs e)
+    {
+        dragging = true;
+        Capture = true;
+        SetFromX(e.X);
+        base.OnMouseDown(e);
+    }
+
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        if (dragging) SetFromX(e.X);
+        base.OnMouseMove(e);
+    }
+
+    protected override void OnMouseUp(MouseEventArgs e)
+    {
+        dragging = false;
+        Capture = false;
+        base.OnMouseUp(e);
+    }
+
+    private void SetFromX(int x)
+    {
+        if (!Enabled) return;
+        var track = TrackRect();
+        Value = (int)Math.Round(Math.Clamp((x - track.Left) / (double)Math.Max(1, track.Width), 0, 1) * 100);
+        ValueChanged?.Invoke(Value);
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+        g.Clear(UiPalette.Backdrop(this, UiPalette.Card));
+
+        var track = TrackRect();
+        var fillWidth = (int)Math.Round(track.Width * Value / 100d);
+        using (var back = new SolidBrush(Enabled ? UiPalette.ControlHover : UiPalette.Border))
+            UiPalette.FillRound(g, back, track, Dpi.Scale(this, 4));
+        if (fillWidth > 0)
+        {
+            using var fill = new SolidBrush(Enabled ? UiPalette.Accent2 : UiPalette.Text3);
+            UiPalette.FillRound(g, fill, new Rectangle(track.X, track.Y, fillWidth, track.Height), Dpi.Scale(this, 4));
+        }
+
+        var thumb = Dpi.Scale(this, 12);
+        var cx = track.Left + fillWidth;
+        var thumbRect = new Rectangle(cx - thumb / 2, (Height - thumb) / 2, thumb, thumb);
+        using (var fill = new SolidBrush(Enabled ? Color.White : UiPalette.Control))
+            g.FillEllipse(fill, thumbRect);
+        using (var stroke = new Pen(Enabled && hover ? UiPalette.Accent2 : UiPalette.Border2))
+            g.DrawEllipse(stroke, thumbRect);
+
+        using var text = new SolidBrush(Enabled ? UiPalette.Text : UiPalette.Text3);
+        using var font = UiFont.Px(12.5f);
+        var label = Value + "%";
+        var size = g.MeasureString(label, font);
+        g.DrawString(label, font, text, Dpi.Scale(this, 106) + (Dpi.Scale(this, 38) - size.Width), (Height - size.Height) / 2f);
+    }
+
+    private Rectangle TrackRect() => new(0, (Height - Dpi.Scale(this, 4)) / 2, Dpi.Scale(this, 90), Dpi.Scale(this, 4));
 }
 
 /// <summary>Compact sidebar row: badge, name, status dot + cadence, and a health percentage with mini bar.</summary>
@@ -300,12 +515,12 @@ internal sealed class ApiListItem : Control
 
         var dotSize = S(7);
         var dot = new Rectangle(textLeft, S(30), dotSize, dotSize);
-        using (var status = new SolidBrush(UsageMath.ColorFor(api.Usage ?? UsageSnapshot.Unknown(), false)))
+        using (var status = new SolidBrush(UsageMath.ColorFor(api.Usage ?? UsageSnapshot.Unknown(), false, api)))
             g.FillEllipse(status, dot);
         g.DrawString(PollText(api.PollSeconds), subFont, muted, dot.Right + S(5), S(28));
 
         var ratio = UsageMath.Ratio(api.Usage ?? UsageSnapshot.Unknown()) ?? 0m;
-        var color = UsageMath.ColorForRatio(ratio);
+        var color = UsageMath.ColorForRatio(ratio, api);
         using var health = new SolidBrush(color);
         using var pctFont = new Font("Segoe UI", 11f * s, FontStyle.Bold, GraphicsUnit.Pixel);
         var pct = Math.Round(ratio * 100m).ToString("0") + "%";
@@ -325,6 +540,60 @@ internal sealed class ApiListItem : Control
         if (seconds % 3600 == 0) return "every " + seconds / 3600 + " " + (seconds == 3600 ? "hour" : "hours");
         if (seconds % 60 == 0) return "every " + seconds / 60 + " " + (seconds == 60 ? "minute" : "minutes");
         return "every " + seconds + " " + (seconds == 1 ? "second" : "seconds");
+    }
+}
+
+/// <summary>Sidebar item for app-wide settings defaults.</summary>
+internal sealed class GeneralListItem : Control
+{
+    private readonly bool selected;
+    private bool hover;
+
+    public GeneralListItem(bool selected)
+    {
+        this.selected = selected;
+        DoubleBuffered = true;
+        Cursor = Cursors.Hand;
+        Height = 52;
+    }
+
+    protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
+    protected override void OnMouseLeave(EventArgs e) { hover = false; Invalidate(); base.OnMouseLeave(e); }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+        g.Clear(UiPalette.Backdrop(this, UiPalette.Bg2));
+
+        var s = Height / 52f;
+        int S(float v) => (int)Math.Round(v * s);
+
+        if (selected || hover)
+        {
+            using var back = new SolidBrush(UiPalette.ControlHover);
+            UiPalette.FillRound(g, back, new Rectangle(0, 0, Width - 1, Height - 1), S(7));
+        }
+
+        if (selected)
+        {
+            using var accent = new SolidBrush(UiPalette.Accent);
+            UiPalette.FillRound(g, accent, new Rectangle(S(1), S(10), S(3), Height - S(20)), S(3));
+        }
+
+        var chip = new Rectangle(S(11), (Height - S(30)) / 2, S(30), S(30));
+        using (var fill = new SolidBrush(UiPalette.Accent2))
+            UiPalette.FillRound(g, fill, chip, S(8));
+        IconPainter.Draw(g, "settings", Rectangle.Inflate(chip, -S(6), -S(6)), Color.White);
+
+        var textLeft = chip.Right + S(11);
+        using var name = new SolidBrush(UiPalette.Text);
+        using var muted = new SolidBrush(UiPalette.Text3);
+        using var nameFont = new Font("Segoe UI", 13f * s, FontStyle.Bold, GraphicsUnit.Pixel);
+        using var subFont = new Font("Segoe UI", 11f * s, FontStyle.Regular, GraphicsUnit.Pixel);
+        g.DrawString("General", nameFont, name, textLeft, S(8));
+        g.DrawString("App defaults", subFont, muted, textLeft, S(28));
     }
 }
 
@@ -428,14 +697,23 @@ internal static class PresetIconCatalog
 
 internal sealed class SettingsForm : Form
 {
+    internal const string GeneralId = "__general";
+
     private readonly List<ApiConfig> apis;
     private readonly Action? onSaved;
     private Panel sidebarList = new();
+    private Panel sidebarPanel = new();
     private Panel editor = new();
+    private Panel footerPanel = new();
     private Label footerStatus = new();
     private string selectedId;
     private ThemeMode themeMode;
     private bool autoApplyPresetIcons;
+    private bool globalStatusDots;
+    private bool globalMatchSystemBacker;
+    private string globalWarningColor;
+    private string globalCriticalColor;
+    private bool globalStartWithWindows;
     private bool dirty;
     private bool saved;
     private bool revealKey;
@@ -451,6 +729,11 @@ internal sealed class SettingsForm : Form
         this.onSaved = onSaved;
         themeMode = SystemTheme.Parse(config.Theme);
         autoApplyPresetIcons = config.AutoApplyPresetIcons;
+        globalStatusDots = config.StatusDots;
+        globalMatchSystemBacker = config.MatchSystemBacker;
+        globalWarningColor = (config.WarningColor ?? ColorTranslator.ToHtml(UiPalette.Warn)).ToUpperInvariant();
+        globalCriticalColor = (config.CriticalColor ?? ColorTranslator.ToHtml(UiPalette.Crit)).ToUpperInvariant();
+        globalStartWithWindows = StartupStore.IsEnabled();
         Text = "Trayce — Settings";
         Icon = AppIcon.Load();
         AutoScaleMode = AutoScaleMode.Dpi;
@@ -465,7 +748,9 @@ internal sealed class SettingsForm : Form
         apis = config.Apis.Count == 0
             ? new List<ApiConfig> { NewApi("api") }
             : config.Apis.Select(Clone).ToList();
-        selectedId = apis.Any(a => string.Equals(a.Id, selectedApiId, StringComparison.OrdinalIgnoreCase))
+        selectedId = selectedApiId is null || string.Equals(selectedApiId, GeneralId, StringComparison.OrdinalIgnoreCase)
+            ? GeneralId
+            : apis.Any(a => string.Equals(a.Id, selectedApiId, StringComparison.OrdinalIgnoreCase))
             ? selectedApiId!
             : apis[0].Id;
 
@@ -593,11 +878,11 @@ internal sealed class SettingsForm : Form
             Font = UiFont.Px(12.5f)
         });
 
-        var close = new TitleGlyphButton("close") { Size = Z(42, 42) };
+        var close = new TitleGlyphButton("close") { Size = Z(46, 42) };
         close.Click += (_, _) => Close();
-        var max = new TitleGlyphButton("max") { Size = Z(42, 42) };
+        var max = new TitleGlyphButton("max") { Size = Z(46, 42) };
         max.Click += (_, _) => WindowState = WindowState == FormWindowState.Maximized ? FormWindowState.Normal : FormWindowState.Maximized;
-        var min = new TitleGlyphButton("min") { Size = Z(42, 42) };
+        var min = new TitleGlyphButton("min") { Size = Z(46, 42) };
         min.Click += (_, _) => WindowState = FormWindowState.Minimized;
 
         // theme cluster (mirrors the prototype's floating Light/Dark toggle + a Match-system switch)
@@ -610,12 +895,6 @@ internal sealed class SettingsForm : Form
         var about = new RoundedButton("About") { Glyph = "info", Size = Z(84, 28), TextPx = 12f, Back = UiPalette.Control, Foreground = UiPalette.Text2, BorderColor = UiPalette.Border2 };
         about.Click += (_, _) => new AboutForm().ShowDialog(this);
 
-        var traySeg = new SegmentedToggle(new[] { "Bars", "Ring", "Minimal" }, (int)UiPalette.Tray) { Size = Z(156, 26) };
-        traySeg.SelectionChanged += (_, _) => ApplyTrayStyle((TrayStyle)traySeg.SelectedIndex);
-        var trayLabel = new Label { AutoSize = false, Text = "Tray", TextAlign = ContentAlignment.MiddleRight, ForeColor = UiPalette.Text2, Font = UiFont.Px(11.5f), Size = Z(34, 42) };
-
-        title.Controls.Add(trayLabel);
-        title.Controls.Add(traySeg);
         title.Controls.Add(matchLabel);
         title.Controls.Add(about);
         title.Controls.Add(matchToggle);
@@ -629,18 +908,15 @@ internal sealed class SettingsForm : Form
         {
             var w = title.ClientSize.Width;
             if (w <= 0) return;
-            close.Location = new Point(w - S(42), 0);
-            max.Location = new Point(w - S(84), 0);
-            min.Location = new Point(w - S(126), 0);
+            close.Location = new Point(w - S(46), 0);
+            max.Location = new Point(w - S(92), 0);
+            min.Location = new Point(w - S(138), 0);
             var h = title.ClientSize.Height;
-            segment.Location = new Point(w - S(126) - S(12) - segment.Width, (h - segment.Height) / 2);
+            segment.Location = new Point(w - S(138) - S(12) - segment.Width, (h - segment.Height) / 2);
             matchToggle.Location = new Point(segment.Left - S(12) - matchToggle.Width, (h - matchToggle.Height) / 2);
             matchLabel.Location = new Point(matchToggle.Left - matchLabel.Width - S(2), 0);
             about.Visible = w >= S(920);
             about.Location = new Point(matchLabel.Left - S(12) - about.Width, (h - about.Height) / 2);
-            var trayRight = about.Visible ? about.Left - S(14) : matchLabel.Left - S(14);
-            traySeg.Location = new Point(trayRight - traySeg.Width, (h - traySeg.Height) / 2);
-            trayLabel.Location = new Point(traySeg.Left - trayLabel.Width - S(2), 0);
         }
 
         title.Layout += (_, _) => LayoutRight();
@@ -655,25 +931,37 @@ internal sealed class SettingsForm : Form
         UiPalette.Apply(mode); // fires UiPalette.Changed -> OnThemeChanged rebuilds the window
     }
 
-    private void ApplyTrayStyle(TrayStyle style)
-    {
-        ConfigStore.SaveTrayStyle(style);
-        UiPalette.ApplyTray(style); // fires UiPalette.Changed -> rebuilds the window + re-renders tray icons
-    }
-
     private Control BuildSidebar()
     {
         var sidebar = new Panel { Dock = DockStyle.Left, Width = S(282), BackColor = UiPalette.Bg2 };
+        sidebarPanel = sidebar;
         sidebar.Controls.Add(sidebarList);
-        sidebar.Controls.Add(new Label
+        var top = new Panel { Dock = DockStyle.Top, Height = S(94), BackColor = UiPalette.Bg2 };
+        var general = new GeneralListItem(string.Equals(selectedId, GeneralId, StringComparison.OrdinalIgnoreCase))
         {
-            Dock = DockStyle.Top,
-            Height = S(38),
+            Location = P(4, 4),
+            Size = Z(258, 52),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
+        };
+        general.Click += (_, _) =>
+        {
+            selectedId = GeneralId;
+            revealKey = false;
+            RenderSidebar();
+            RenderEditor();
+        };
+        top.Controls.Add(general);
+        top.Controls.Add(new Label
+        {
+            Location = P(0, 56),
+            Size = Z(282, 38),
             Padding = G(14, 16, 0, 0),
             Text = "TRACKED APIS",
             ForeColor = UiPalette.Text3,
             Font = UiFont.Px(11f, bold: true)
         });
+        top.Layout += (_, _) => general.Width = top.ClientSize.Width - S(16);
+        sidebar.Controls.Add(top);
 
         var add = new RoundedButton("Add API") { Glyph = "plus", Back = UiPalette.Control, Foreground = UiPalette.Text, Dock = DockStyle.Fill, Height = S(36), BorderColor = UiPalette.Border2 };
         add.Click += (_, _) =>
@@ -697,6 +985,7 @@ internal sealed class SettingsForm : Form
     private Control BuildFooter()
     {
         var footer = new Panel { Dock = DockStyle.Fill, Height = S(54), BackColor = UiPalette.Titlebar };
+        footerPanel = footer;
         footer.Controls.Add(new Panel { Dock = DockStyle.Top, Height = S(1), BackColor = UiPalette.Border });
 
         footerStatus.Location = P(16, 1);
@@ -723,6 +1012,21 @@ internal sealed class SettingsForm : Form
         footer.Layout += (_, _) => LayoutRight();
         LayoutRight();
         return footer;
+    }
+
+    internal void PaintSnapshotChrome(Graphics target)
+    {
+        DrawSnapshotControl(sidebarPanel, target);
+        DrawSnapshotControl(footerPanel, target);
+    }
+
+    private void DrawSnapshotControl(Control control, Graphics target)
+    {
+        if (control.IsDisposed || control.Width <= 0 || control.Height <= 0) return;
+        using var bmp = new Bitmap(control.Width, control.Height);
+        control.DrawToBitmap(bmp, new Rectangle(Point.Empty, control.Size));
+        var point = PointToClient(control.PointToScreen(Point.Empty));
+        target.DrawImageUnscaled(bmp, point);
     }
 
     private void RenderSidebar()
@@ -760,6 +1064,12 @@ internal sealed class SettingsForm : Form
         {
             editor.SuspendLayout();
             editor.Controls.Clear();
+            if (string.Equals(selectedId, GeneralId, StringComparison.OrdinalIgnoreCase))
+            {
+                RenderGeneralEditor();
+                return;
+            }
+
             var api = SelectedApi();
             var width = Math.Max(S(420), editor.ClientSize.Width - S(48) - (editor.VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0));
             var y = S(20);
@@ -769,9 +1079,6 @@ internal sealed class SettingsForm : Form
             var sourceField = TextField(api.SourceUrl ?? "", v => { api.SourceUrl = v; MarkDirty(); }, 330, mono: true, placeholder: "https://api.example.com/usage");
             sourceField.Box.Leave += (_, _) => ApplySmartIcon(api);
 
-            Section("Application", ref y, width, Card(width,
-                AutoIconRow()));
-
             Section("Identity", ref y, width, Card(width,
                 Row("API name", null, nameField),
                 Row("Provider / service type", null, TextField(api.Provider ?? "", v => { api.Provider = v; MarkDirty(); }, 260, placeholder: "Optional")),
@@ -779,9 +1086,17 @@ internal sealed class SettingsForm : Form
 
             Section("Appearance", ref y, width, Card(width,
                 BrandRow(api),
-                ToggleRow(api),
-                CustomColorRow(api),
-                TrayPreviewRow(api)));
+                ToggleRow("Status dot", "Flag stale data and fetch errors", api.ShowStatusDot, v => api.ShowStatusDot = v),
+                RingReflectsRow(api),
+                ThresholdRow(api),
+                ToggleRow("Tray backer", "Match the system theme", api.MatchSystemBacker, v => api.MatchSystemBacker = v),
+                ColorSettingRow("Backer color", null, BackerColor(api), v => api.BackerColor = v, !api.MatchSystemBacker),
+                SliderRow("Backer opacity", null, api.BackerOpacity, v => api.BackerOpacity = v, !api.MatchSystemBacker),
+                ToggleRow("Ring track", "Match the ring color", api.TrackMatchesRing, v => api.TrackMatchesRing = v),
+                ColorSettingRow("Track color", null, TrackColor(api), v => api.TrackColor = v, !api.TrackMatchesRing),
+                SliderRow("Track opacity", null, api.TrackOpacity, v => api.TrackOpacity = v, true),
+                ColorSettingRow("Warning color", "Ring at 70-90%", WarningColor(api), v => api.WarningColor = v, true),
+                ColorSettingRow("Critical color", "Ring at 90%+", CriticalColor(api), v => api.CriticalColor = v, true)));
 
             Section("Connection", ref y, width, Card(width,
                 ApiKeyRow(api),
@@ -802,6 +1117,33 @@ internal sealed class SettingsForm : Form
             editor.ResumeLayout();
             rendering = false;
         }
+    }
+
+    internal void ScrollEditorToBottomForPreview()
+    {
+        editor.VerticalScroll.Value = Math.Max(editor.VerticalScroll.Minimum, editor.VerticalScroll.Maximum - editor.VerticalScroll.LargeChange + 1);
+        editor.PerformLayout();
+    }
+
+    private void RenderGeneralEditor()
+    {
+        var width = Math.Max(S(420), editor.ClientSize.Width - S(48) - (editor.VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0));
+        var y = S(20);
+
+        Section("Appearance", ref y, width, Card(width,
+            ThemeRow(),
+            ToggleRow("Status dots", "Show stale and error dots on tray rings", globalStatusDots, v => globalStatusDots = v),
+            ToggleRow("Tray backer", "Match the system theme by default", globalMatchSystemBacker, v => globalMatchSystemBacker = v),
+            ColorSettingRow("Warning color", "Ring at 70-90% usage", globalWarningColor, v => globalWarningColor = v, true),
+            ColorSettingRow("Critical color", "Ring at 90%+ usage", globalCriticalColor, v => globalCriticalColor = v, true)));
+
+        Section("Provider icons", ref y, width, Card(width,
+            AutoIconRow()));
+
+        Section("Startup", ref y, width, Card(width,
+            ToggleRow("Start with Windows", "Launch Trayce automatically at sign-in", globalStartWithWindows, v => globalStartWithWindows = v)));
+
+        editor.AutoScrollMinSize = new Size(0, y);
     }
 
     private void Section(string title, ref int y, int width, Control card)
@@ -909,47 +1251,108 @@ internal sealed class SettingsForm : Form
         return Row("Auto-match LobeHub icons", "Updates missing/default logos and colors", toggle);
     }
 
+    private Control ThemeRow()
+    {
+        var segment = new SegmentedToggle(new[] { "Light", "Dark" }, UiPalette.IsDark ? 1 : 0) { Size = Z(112, 26), Disabled = themeMode == ThemeMode.System };
+        segment.SelectionChanged += (_, _) => ApplyTheme(segment.SelectedIndex == 0 ? ThemeMode.Light : ThemeMode.Dark);
+        return Row("Theme", themeMode == ThemeMode.System ? "Following the Windows setting" : null, segment);
+    }
+
     private Control BrandRow(ApiConfig api)
     {
-        var wrap = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = false, BackColor = Color.Transparent, Size = Z(130, 30) };
-        wrap.Controls.Add(new ColorSwatch(BrandColor(api)) { Size = Z(24, 24), Margin = G(0, 3, 9, 0) });
-        wrap.Controls.Add(new Label { Text = BrandColor(api), AutoSize = false, Size = Z(96, 30), TextAlign = ContentAlignment.MiddleLeft, ForeColor = UiPalette.Text2, Font = UiFont.Px(12.5f, mono: true) });
-        return Row("Brand color", "Provided default", wrap);
-    }
-
-    private Control ToggleRow(ApiConfig api)
-    {
-        var toggle = new ToggleSwitch(api.UseBrandColor) { Size = Z(40, 21) };
-        toggle.Click += (_, _) =>
-        {
-            api.UseBrandColor = !api.UseBrandColor;
-            MarkDirty();
-            RenderEditor();
-            RenderSidebar();
-        };
-        return Row("Use brand color for tray", null, toggle);
-    }
-
-    private Control CustomColorRow(ApiConfig api)
-    {
-        var current = (api.CustomColor ?? api.BrandColor ?? "#0078D4").ToUpperInvariant();
+        var current = BrandColor(api);
         var field = new ColorField(current) { Size = Z(120, 31) };
-        field.Enabled = !api.UseBrandColor;
         field.Click += (_, _) =>
         {
-            using var picker = new ColorPickerForm(api.CustomColor ?? api.BrandColor ?? "#0078D4", api.BrandColor ?? "#0078D4");
+            using var picker = new ColorPickerForm(current, api.BrandColor ?? "#0078D4");
             if (picker.ShowDialog(this) != DialogResult.OK) return;
             api.CustomColor = picker.SelectedColor;
-            api.UseBrandColor = false;
+            api.UseBrandColor = string.Equals(api.CustomColor, api.BrandColor, StringComparison.OrdinalIgnoreCase);
             MarkDirty();
             RenderEditor();
             RenderSidebar();
         };
-        return Row("Custom tray color", "Overrides the brand default", field, muted: api.UseBrandColor);
+        return Row("Brand color", "Identity color", field);
     }
 
-    private Control TrayPreviewRow(ApiConfig api) =>
-        Row("Tray preview", "Status colors override when warning or critical", new TrayPreview(api) { Size = Z(58, 34) });
+    private Control ToggleRow(string title, string? subtitle, bool value, Action<bool> set)
+    {
+        var toggle = new ToggleSwitch(value) { Size = Z(40, 21) };
+        toggle.Click += (_, _) =>
+        {
+            set(!value);
+            MarkDirty();
+            RenderEditor();
+            RenderSidebar();
+        };
+        return Row(title, subtitle, toggle);
+    }
+
+    private Control RingReflectsRow(ApiConfig api)
+    {
+        var selected = string.Equals(api.RingMode, "primary", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+        var segment = new SegmentedToggle(new[] { "Busiest", "Primary" }, selected) { Size = Z(132, 26) };
+        segment.SelectionChanged += (_, _) =>
+        {
+            api.RingMode = segment.SelectedIndex == 1 ? "primary" : "busiest";
+            MarkDirty();
+            RenderSidebar();
+        };
+        return Row("Ring reflects", "Which limit drives the arc", segment);
+    }
+
+    private Control ThresholdRow(ApiConfig api)
+    {
+        var wrap = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = false, BackColor = Color.Transparent, Size = Z(138, 31) };
+        var warn = TextField(api.WarningThreshold.ToString(), v =>
+        {
+            if (int.TryParse(v, out var n)) api.WarningThreshold = Math.Clamp(n, 1, Math.Max(1, api.CriticalThreshold - 1));
+            MarkDirty();
+            RenderSidebar();
+        }, 44, centered: true);
+        warn.Margin = G(0, 0, 5, 0);
+        var slash = new Label { AutoSize = false, Size = Z(11, 31), Text = "/", TextAlign = ContentAlignment.MiddleCenter, ForeColor = UiPalette.Text3, Font = UiFont.Px(12.5f), Margin = G(0, 0, 5, 0) };
+        var crit = TextField(api.CriticalThreshold.ToString(), v =>
+        {
+            if (int.TryParse(v, out var n)) api.CriticalThreshold = Math.Clamp(n, Math.Min(99, api.WarningThreshold + 1), 100);
+            MarkDirty();
+            RenderSidebar();
+        }, 44, centered: true);
+        crit.Margin = G(0, 0, 5, 0);
+        var pct = new Label { AutoSize = false, Size = Z(18, 31), Text = "%", TextAlign = ContentAlignment.MiddleLeft, ForeColor = UiPalette.Text3, Font = UiFont.Px(12.5f) };
+        wrap.Controls.Add(warn);
+        wrap.Controls.Add(slash);
+        wrap.Controls.Add(crit);
+        wrap.Controls.Add(pct);
+        return Row("Custom thresholds", "Warning and critical usage", wrap);
+    }
+
+    private Control ColorSettingRow(string title, string? subtitle, string value, Action<string> set, bool enabled)
+    {
+        var field = new ColorField(value) { Size = Z(120, 31), Enabled = enabled };
+        field.Click += (_, _) =>
+        {
+            if (!field.Enabled) return;
+            using var picker = new ColorPickerForm(value, value);
+            if (picker.ShowDialog(this) != DialogResult.OK) return;
+            set(picker.SelectedColor);
+            MarkDirty();
+            RenderEditor();
+            RenderSidebar();
+        };
+        return Row(title, subtitle, field, muted: !enabled);
+    }
+
+    private Control SliderRow(string title, string? subtitle, int value, Action<int> set, bool enabled)
+    {
+        var slider = new PercentSlider(value) { Size = Z(148, 31), Enabled = enabled };
+        slider.ValueChanged += v =>
+        {
+            set(v);
+            MarkDirty();
+        };
+        return Row(title, subtitle, slider, muted: !enabled);
+    }
 
     private Control ApiKeyRow(ApiConfig api)
     {
@@ -1081,20 +1484,13 @@ internal sealed class SettingsForm : Form
         return field;
     }
 
-    private ComboBox Combo(IEnumerable<string> items, string selected)
+    private SelectBox Combo(IEnumerable<string> items, string selected)
     {
-        var combo = new ComboBox
+        var combo = new SelectBox(items, selected)
         {
-            DropDownStyle = ComboBoxStyle.DropDownList,
             Width = S(120),
-            FlatStyle = FlatStyle.Flat,
-            BackColor = UiPalette.Control,
-            ForeColor = UiPalette.Text,
-            Font = UiFont.Px(12.5f),
-            IntegralHeight = false
+            Height = S(31)
         };
-        combo.Items.AddRange(items.Cast<object>().ToArray());
-        combo.SelectedItem = combo.Items.Contains(selected) ? selected : combo.Items[0];
         return combo;
     }
 
@@ -1137,6 +1533,7 @@ internal sealed class SettingsForm : Form
         try
         {
             ConfigStore.Save(EditedConfig());
+            StartupStore.Set(globalStartWithWindows);
             dirty = false;
             saved = true;
             UpdateFooter();
@@ -1183,7 +1580,11 @@ internal sealed class SettingsForm : Form
     }
 
     private ApiConfig SelectedApi() => apis.FirstOrDefault(a => string.Equals(a.Id, selectedId, StringComparison.OrdinalIgnoreCase)) ?? apis[0];
-    private string BrandColor(ApiConfig api) => (api.BrandColor ?? "#0078D4").ToUpperInvariant();
+    private string BrandColor(ApiConfig api) => ((api.UseBrandColor ? api.BrandColor : api.CustomColor) ?? api.BrandColor ?? "#0078D4").ToUpperInvariant();
+    private static string WarningColor(ApiConfig api) => (api.WarningColor ?? ColorTranslator.ToHtml(UiPalette.Warn)).ToUpperInvariant();
+    private static string CriticalColor(ApiConfig api) => (api.CriticalColor ?? ColorTranslator.ToHtml(UiPalette.Crit)).ToUpperInvariant();
+    private static string TrackColor(ApiConfig api) => (api.TrackColor ?? ColorTranslator.ToHtml(UiPalette.Accent)).ToUpperInvariant();
+    private static string BackerColor(ApiConfig api) => (api.BackerColor ?? (UiPalette.IsDark ? "#F3F3F3" : "#202020")).ToUpperInvariant();
 
     private string UniqueId(string seed)
     {
@@ -1251,6 +1652,18 @@ internal sealed class SettingsForm : Form
         BrandColor = api.BrandColor,
         UseBrandColor = api.UseBrandColor,
         CustomColor = api.CustomColor,
+        ShowStatusDot = api.ShowStatusDot,
+        RingMode = api.RingMode,
+        WarningThreshold = api.WarningThreshold,
+        CriticalThreshold = api.CriticalThreshold,
+        MatchSystemBacker = api.MatchSystemBacker,
+        BackerColor = api.BackerColor,
+        BackerOpacity = api.BackerOpacity,
+        TrackMatchesRing = api.TrackMatchesRing,
+        TrackColor = api.TrackColor,
+        TrackOpacity = api.TrackOpacity,
+        WarningColor = api.WarningColor,
+        CriticalColor = api.CriticalColor,
         ApiKey = api.ApiKey,
         SourceUrl = api.SourceUrl,
         PollSeconds = api.PollSeconds,
@@ -1261,7 +1674,10 @@ internal sealed class SettingsForm : Form
     {
         Apis = apis.Select(Clone).ToList(),
         Theme = SystemTheme.ToConfig(themeMode),
-        TrayStyle = TrayStyles.ToConfig(UiPalette.Tray),
-        AutoApplyPresetIcons = autoApplyPresetIcons
+        AutoApplyPresetIcons = autoApplyPresetIcons,
+        StatusDots = globalStatusDots,
+        MatchSystemBacker = globalMatchSystemBacker,
+        WarningColor = globalWarningColor,
+        CriticalColor = globalCriticalColor
     };
 }

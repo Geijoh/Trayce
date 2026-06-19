@@ -15,7 +15,66 @@ New-Item -ItemType Directory -Force -Path $WorkDir | Out-Null
 
 Push-Location $root
 try {
-    dotnet run -- --render-all $WorkDir
+    dotnet build --nologo | Write-Host
+
+    $exe = Join-Path $root "bin\Debug\net8.0-windows\win-x64\Trayce.exe"
+    if (-not (Test-Path -LiteralPath $exe)) {
+        throw "Missing built renderer: $exe"
+    }
+
+    function Invoke-RenderSurface {
+        param(
+            [Parameter(Mandatory=$true)][string]$Surface,
+            [Parameter(Mandatory=$true)][string]$Target,
+            [int]$TimeoutSeconds = 10
+        )
+
+        $stdout = Join-Path $WorkDir "$Surface.out.txt"
+        $stderr = Join-Path $WorkDir "$Surface.err.txt"
+        Remove-Item -LiteralPath $Target,$stdout,$stderr -ErrorAction SilentlyContinue
+
+        $process = Start-Process -FilePath $exe `
+            -ArgumentList @("--render-surface", $Surface, "`"$Target`"") `
+            -WorkingDirectory $root `
+            -RedirectStandardOutput $stdout `
+            -RedirectStandardError $stderr `
+            -PassThru
+
+        $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+        $rendered = $false
+        while ((Get-Date) -lt $deadline) {
+            if (Test-Path -LiteralPath $Target) {
+                $item = Get-Item -LiteralPath $Target
+                if ($item.Length -gt 0) {
+                    $rendered = $true
+                    break
+                }
+            }
+            if ($process.HasExited) { break }
+            Start-Sleep -Milliseconds 150
+        }
+
+        if (-not $process.HasExited) {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+        }
+
+        if (-not $rendered) {
+            $outText = if (Test-Path -LiteralPath $stdout) { Get-Content -Raw -LiteralPath $stdout } else { "" }
+            $errText = if (Test-Path -LiteralPath $stderr) { Get-Content -Raw -LiteralPath $stderr } else { "" }
+            throw "Timed out rendering $Surface. stdout=$outText stderr=$errText"
+        }
+    }
+
+    $surfaces = @(
+        "tray-dark",
+        "settings-api-light",
+        "flyout-ok-dark",
+        "menu-dark"
+    )
+
+    foreach ($surface in $surfaces) {
+        Invoke-RenderSurface -Surface $surface -Target (Join-Path $WorkDir "$surface.png")
+    }
 }
 finally {
     Pop-Location
@@ -63,7 +122,7 @@ public static class TrayceScreenshotMask
 
 $shots = @(
     @{ Source = "tray-dark.png"; Target = "tray-icons.png"; Radius = 10 },
-    @{ Source = "settings-light.png"; Target = "settings-main.png"; Radius = 12 },
+    @{ Source = "settings-api-light.png"; Target = "settings-main.png"; Radius = 12 },
     @{ Source = "flyout-ok-dark.png"; Target = "details-flyout.png"; Radius = 10 },
     @{ Source = "menu-dark.png"; Target = "context-menu.png"; Radius = 8 }
 )

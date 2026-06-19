@@ -92,7 +92,7 @@ internal sealed class AboutForm : Form
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.CenterParent;
         AutoScaleMode = AutoScaleMode.Dpi;
-        ClientSize = Z(420, 438);
+        ClientSize = Z(420, 462);
         BackColor = UiPalette.Bg;
         ForeColor = UiPalette.Text;
         Font = UiFont.Px(12.5f);
@@ -106,15 +106,15 @@ internal sealed class AboutForm : Form
         Controls.Add(Centered("Native Windows tray monitoring for API usage, health, and quota signals.", 180, 44, 12.5f, false, UiPalette.Text2));
         Controls.Add(new Panel { Location = P(28, 242), Size = Z(364, 1), BackColor = UiPalette.Border });
         Controls.Add(Centered("Copyright 2026 Chris Johnson.\nAll rights reserved.", 256, 42, 12f, false, UiPalette.Text2));
-        Controls.Add(Centered(Disclaimer, 313, 44, 11.5f, false, UiPalette.Text3));
+        Controls.Add(Centered(Disclaimer, 313, 64, 11.5f, false, UiPalette.Text3));
 
         var close = new TitleGlyphButton("close") { Location = P(374, 16), Size = Z(28, 28) };
         close.Click += (_, _) => Close();
         Controls.Add(close);
 
-        var github = new RoundedButton("GitHub") { Glyph = "link", Size = Z(170, 34), Location = P(28, 384), Back = UiPalette.Control, Foreground = UiPalette.Text };
+        var github = new RoundedButton("GitHub") { Glyph = "link", Size = Z(170, 34), Location = P(28, 408), Back = UiPalette.Control, Foreground = UiPalette.Text };
         github.Click += (_, _) => OpenUrl(GitHubUrl);
-        var privacy = new RoundedButton("Privacy Policy") { Glyph = "info", Size = Z(176, 34), Location = P(216, 384), Back = UiPalette.Control, Foreground = UiPalette.Text };
+        var privacy = new RoundedButton("Privacy Policy") { Glyph = "info", Size = Z(176, 34), Location = P(216, 408), Back = UiPalette.Control, Foreground = UiPalette.Text };
         privacy.Click += (_, _) => OpenUrl(PrivacyUrl);
         Controls.Add(github);
         Controls.Add(privacy);
@@ -395,7 +395,7 @@ internal sealed class PresetPickerForm : Form
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.CenterParent;
         AutoScaleMode = AutoScaleMode.Dpi;
-        ClientSize = new Size(608, 500);
+        ClientSize = new Size(608, 556);
         BackColor = UiPalette.Bg;
         ForeColor = UiPalette.Text;
         Font = UiFont.Px(13f);
@@ -409,18 +409,18 @@ internal sealed class PresetPickerForm : Form
             AutoSize = true,
             MaximumSize = new Size(560, 0),
             Location = new Point(20, 46),
-            Text = "Pick a service to start from — its logo mark and brand color are filled in automatically. Everything stays editable afterward.",
+            Text = "Pick a service to start from. Trayce fills in the logo mark and brand color automatically.",
             ForeColor = UiPalette.Text2,
             Font = UiFont.Px(12.5f)
         });
 
-        var grid = new FlowLayoutPanel { Location = new Point(20, 78), Size = new Size(568, 360), FlowDirection = FlowDirection.LeftToRight, WrapContents = true, BackColor = Color.Transparent };
+        var grid = new FlowLayoutPanel { Location = new Point(20, 104), Size = new Size(568, 384), FlowDirection = FlowDirection.LeftToRight, WrapContents = true, BackColor = Color.Transparent };
         for (var i = 0; i < Presets.Length; i++) grid.Controls.Add(Card(Presets[i], i));
         Controls.Add(grid);
 
-        var footer = new Panel { Location = new Point(0, 444), Size = new Size(ClientSize.Width, 56), BackColor = UiPalette.Bg2 };
+        var footer = new Panel { Location = new Point(0, 500), Size = new Size(ClientSize.Width, 56), BackColor = UiPalette.Bg2 };
         footer.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 1, BackColor = UiPalette.Border });
-        var blank = new RoundedButton("Blank / custom") { Glyph = "plus", Size = new Size(150, 32), Location = new Point(20, 12) };
+        var blank = new RoundedButton("Blank / custom") { Glyph = "plus", Size = new Size(176, 32), Location = new Point(20, 12) };
         blank.Click += (_, _) => { Preset = null; DialogResult = DialogResult.OK; Close(); };
         var cancel = new RoundedButton("Cancel") { Size = new Size(84, 32), Location = new Point(ClientSize.Width - 104, 12) };
         cancel.Click += (_, _) => Close();
@@ -433,7 +433,7 @@ internal sealed class PresetPickerForm : Form
 
     private Control Card(ApiPreset preset, int index)
     {
-        var card = new Panel { Size = new Size(184, 52), Margin = new Padding(0, 0, index % 3 == 2 ? 0 : 8, 8), Cursor = Cursors.Hand, BackColor = Color.Transparent };
+        var card = new Panel { Size = new Size(184, 56), Margin = new Padding(0, 0, index % 3 == 2 ? 0 : 8, 8), Cursor = Cursors.Hand, BackColor = Color.Transparent };
         card.Click += (_, _) => { Preset = preset; DialogResult = DialogResult.OK; Close(); };
         card.Paint += (_, e) =>
         {
@@ -441,7 +441,7 @@ internal sealed class PresetPickerForm : Form
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
             g.Clear(UiPalette.Backdrop(card, UiPalette.Bg));
-            int S(int value) => Dpi.Scale(card, value);
+            int S(int value) => value;
             using (var back = new SolidBrush(UiPalette.Card)) UiPalette.FillRound(g, back, new Rectangle(0, 0, card.Width - 1, card.Height - 1), S(8));
             using (var border = new Pen(UiPalette.Border2)) UiPalette.DrawRound(g, border, new Rectangle(0, 0, card.Width - 1, card.Height - 1), S(8));
 
@@ -458,10 +458,11 @@ internal sealed class PresetPickerForm : Form
             };
             Logo.Draw(g, preview, Rectangle.Inflate(badge, -S(6), -S(6)), Color.White, small: true);
 
-            using var name = new SolidBrush(UiPalette.Text);
-            using var prov = new SolidBrush(UiPalette.Text3);
-            g.DrawString(preset.Name, UiFont.Px(12.5f, bold: true), name, badge.Right + S(11), S(8));
-            g.DrawString(preset.Provider, UiFont.Px(10.5f), prov, badge.Right + S(11), S(28));
+            var textLeft = badge.Right + S(11);
+            var textWidth = card.Width - textLeft - S(9);
+            var flags = TextFormatFlags.NoPadding | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis;
+            TextRenderer.DrawText(g, preset.Name, UiFont.Px(11.5f, bold: true), new Rectangle(textLeft, S(8), textWidth, S(20)), UiPalette.Text, flags);
+            TextRenderer.DrawText(g, preset.Provider, UiFont.Px(10.5f), new Rectangle(textLeft, S(29), textWidth, S(16)), UiPalette.Text3, flags);
         };
         return card;
     }

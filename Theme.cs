@@ -11,13 +11,6 @@ internal enum ThemeMode
     Dark
 }
 
-internal enum TrayStyle
-{
-    Bars,
-    Ring,
-    Minimal
-}
-
 /// <summary>One concrete set of color tokens, mirrored from the prototype's CSS variables.</summary>
 internal sealed class ThemePalette
 {
@@ -77,12 +70,12 @@ internal sealed class ThemePalette
     public static readonly ThemePalette Light = new()
     {
         Bg = Color.FromArgb(0xf3, 0xf3, 0xf3),
-        Bg2 = Color.FromArgb(0xfb, 0xfb, 0xfb),
+        Bg2 = Color.FromArgb(0xed, 0xee, 0xf1),
         Card = Color.FromArgb(0xff, 0xff, 0xff),
         Card2 = Color.FromArgb(0xf7, 0xf7, 0xf7),
         Flyout = Color.FromArgb(0xf9, 0xf9, 0xf9),
         Menu = Color.FromArgb(0xf3, 0xf3, 0xf3),
-        Titlebar = Color.FromArgb(0xff, 0xff, 0xff),
+        Titlebar = Color.FromArgb(0xee, 0xf0, 0xf4),
         TaskbarSolid = Color.FromArgb(0xea, 0xea, 0xea),
         Border = Color.FromArgb(237, 237, 237),  // --stroke  rgba(0,0,0,.07)
         Border2 = Color.FromArgb(222, 222, 222), // --stroke2 rgba(0,0,0,.13)
@@ -133,23 +126,6 @@ internal static class SystemTheme
     };
 }
 
-internal static class TrayStyles
-{
-    public static TrayStyle Parse(string? value) => value?.Trim().ToLowerInvariant() switch
-    {
-        "ring" => TrayStyle.Ring,
-        "minimal" => TrayStyle.Minimal,
-        _ => TrayStyle.Bars
-    };
-
-    public static string ToConfig(TrayStyle style) => style switch
-    {
-        TrayStyle.Ring => "ring",
-        TrayStyle.Minimal => "minimal",
-        _ => "bars"
-    };
-}
-
 /// <summary>Swappable accessor over the current <see cref="ThemePalette"/>. Field names match the original
 /// static palette so existing call sites compile unchanged; values now follow the active theme.</summary>
 internal static class UiPalette
@@ -158,9 +134,8 @@ internal static class UiPalette
 
     public static ThemeMode Mode { get; private set; } = ThemeMode.System;
     public static bool IsDark { get; private set; } = true;
-    public static TrayStyle Tray { get; private set; } = TrayStyle.Bars;
 
-    /// <summary>Raised after the active theme/tray style changes so live windows can repaint/rebuild.</summary>
+    /// <summary>Raised after the active theme changes so live windows can repaint/rebuild.</summary>
     public static event Action? Changed;
 
     public static void Apply(ThemeMode mode)
@@ -168,12 +143,6 @@ internal static class UiPalette
         Mode = mode;
         IsDark = mode == ThemeMode.Dark || (mode == ThemeMode.System && SystemTheme.IsDark());
         current = IsDark ? ThemePalette.Dark : ThemePalette.Light;
-        Changed?.Invoke();
-    }
-
-    public static void ApplyTray(TrayStyle style)
-    {
-        Tray = style;
         Changed?.Invoke();
     }
 

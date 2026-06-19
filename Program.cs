@@ -21,28 +21,37 @@ internal static class Program
         if (args.Contains("--self-test"))
         {
             SelfTest.Run();
-            return 0;
+            return ExitRenderMode();
         }
 
         var previewIndex = Array.IndexOf(args, "--render-preview");
         if (previewIndex >= 0)
         {
             PreviewRenderer.Render(previewIndex + 1 < args.Length ? args[previewIndex + 1] : "trayce-preview.png");
-            return 0;
+            return ExitRenderMode();
         }
 
         var settingsPreviewIndex = Array.IndexOf(args, "--render-settings-preview");
         if (settingsPreviewIndex >= 0)
         {
             PreviewRenderer.RenderSettings(settingsPreviewIndex + 1 < args.Length ? args[settingsPreviewIndex + 1] : "trayce-settings-preview.png");
-            return 0;
+            return ExitRenderMode();
         }
 
         var renderAllIndex = Array.IndexOf(args, "--render-all");
         if (renderAllIndex >= 0)
         {
             PreviewRenderer.RenderAll(renderAllIndex + 1 < args.Length ? args[renderAllIndex + 1] : "out");
-            return 0;
+            return ExitRenderMode();
+        }
+
+        var renderSurfaceIndex = Array.IndexOf(args, "--render-surface");
+        if (renderSurfaceIndex >= 0)
+        {
+            var name = renderSurfaceIndex + 1 < args.Length ? args[renderSurfaceIndex + 1] : "";
+            var path = renderSurfaceIndex + 2 < args.Length ? args[renderSurfaceIndex + 2] : Path.Combine("out", name + ".png");
+            PreviewRenderer.RenderSurface(name, path);
+            return ExitRenderMode();
         }
 
         // Real on-screen capture (reflects actual DPI scaling, unlike DrawToBitmap).
@@ -63,6 +72,13 @@ internal static class Program
         if (!created) return 0;
 
         Application.Run(new TrayceContext());
+        return 0;
+    }
+
+    private static int ExitRenderMode()
+    {
+        Application.Exit();
+        Environment.Exit(0);
         return 0;
     }
 }
@@ -161,8 +177,6 @@ internal sealed class TrayceContext : ApplicationContext
             new("Open config JSON", "code", OpenConfig),
             new("Reload config", "refresh", () => { Reload(); Toaster.Show(null, "Configuration reloaded"); }),
             TrayMenu.Item.Sep,
-            new("About Trayce", "info", ShowAbout),
-            TrayMenu.Item.Sep,
             new("Start with Windows", "windows", () =>
             {
                 var enable = !StartupStore.IsEnabled();
@@ -231,7 +245,6 @@ internal sealed class TrayceContext : ApplicationContext
         }
 
         UiPalette.Apply(SystemTheme.Parse(config.Theme));
-        UiPalette.ApplyTray(TrayStyles.Parse(config.TrayStyle));
 
         var liveIds = config.Apis.Select(a => a.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var stale in trays.Keys.Where(id => !liveIds.Contains(id)).ToList())
@@ -376,7 +389,7 @@ internal static class IconRenderer
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool DestroyIcon(IntPtr hIcon);
 
-    // Tray icon rendered in the selected style; a status dot (top-right of the badge) shows only when stale/failed.
+    // Spec: taskbar icon is a ring only; provider identity stays in flyout/settings where there is room.
     public static Icon Render(ApiConfig api, UsageSnapshot usage, bool stale)
     {
         var iconSize = Math.Max(32, SystemInformation.SmallIconSize.Width);
@@ -388,20 +401,19 @@ internal static class IconRenderer
         g.Clear(Color.Transparent);
         g.ScaleTransform(iconSize / 32f, iconSize / 32f);
 
-        var color = Brand.Color(api, fallback: UiPalette.Accent2);
-        var badge = UiPalette.Tray switch
-        {
-            TrayStyle.Ring => DrawRing(g, api, usage, color),
-            TrayStyle.Minimal => DrawMinimal(g, api, usage, color),
-            _ => DrawBars(g, api, usage, color)
-        };
+        DrawBacker(g, api);
+        DrawUsageRing(g, api, usage, stale);
 
-        if (stale)
+        if (stale && api.ShowStatusDot)
         {
-            var dot = new Rectangle(badge.Right - 6, Math.Max(1, badge.Top - 1), 8, 8);
+            var dot = new RectangleF(22f, 0f, 8f, 8f);
             using var border = new SolidBrush(UiPalette.TaskbarSolid);
-            using var fill = new SolidBrush(StatusInfo.For(stale, usage.Message).Color);
-            g.FillEllipse(border, dot.X - 1, dot.Y - 1, dot.Width + 2, dot.Height + 2);
+            var status = StatusInfo.For(stale, usage.Message);
+            var dotColor = status.Label == "Refresh failed"
+                ? UsageMath.ColorValue(api.CriticalColor, UiPalette.Crit)
+                : UsageMath.ColorValue(api.WarningColor, UiPalette.Warn);
+            using var fill = new SolidBrush(dotColor);
+            g.FillEllipse(border, dot.X - 1.5f, dot.Y - 1.5f, dot.Width + 3, dot.Height + 3);
             g.FillEllipse(fill, dot);
         }
 
@@ -417,85 +429,37 @@ internal static class IconRenderer
         }
     }
 
-    private static Rectangle DrawBars(Graphics g, ApiConfig api, UsageSnapshot usage, Color color)
+    private static void DrawUsageRing(Graphics g, ApiConfig api, UsageSnapshot usage, bool stale)
     {
-        var badge = new Rectangle(4, 0, 24, 24);
-        using (var brush = new SolidBrush(color)) UiPalette.FillRound(g, brush, badge, 5);
-        DrawBadgeMark(g, api, badge);
+        const float scale = 32f / 36f;
+        var ring = new RectangleF(4f * scale, 4f * scale, 28f * scale, 28f * scale);
+        const float stroke = 5f * scale;
+        var ratio = UsageMath.Ratio(usage, api) ?? 0m;
+        var color = stale && ratio <= 0m ? UiPalette.Accent : UsageMath.ColorForRatio(ratio, api);
+        var trackColor = api.TrackMatchesRing ? color : UsageMath.ColorValue(api.TrackColor, color);
+        var trackAlpha = (int)Math.Round(255 * Math.Clamp(api.TrackOpacity, 0, 100) / 100d);
 
-        var ratios = UsageMath.Ratios(usage).Take(2).ToList();
-        if (ratios.Count == 0) ratios.Add(UsageMath.Ratio(usage) ?? 0m);
-        const float barWidth = 23f;
-        const float barHeight = 3f;
-        const float barGap = 1f;
-        var barX = badge.Left + (badge.Width - barWidth) / 2;
-        var y = badge.Bottom + 1f;
-        using var track = new SolidBrush(Color.FromArgb(38, Color.White));
-        foreach (var ratio in ratios)
+        using (var track = new Pen(Color.FromArgb(trackAlpha, trackColor), stroke) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+            g.DrawEllipse(track, ring);
+        if (ratio > 0m)
         {
-            var fillWidth = Math.Max(2f, barWidth * (float)Math.Clamp(ratio, 0m, 1m));
-            using var fill = new SolidBrush(UsageMath.ColorForRatio(ratio));
-            UiPalette.FillRound(g, track, new RectangleF(barX, y, barWidth, barHeight), 1.5f);
-            if (ratio > 0m) UiPalette.FillRound(g, fill, new RectangleF(barX, y, fillWidth, barHeight), 1.5f);
-            y += barHeight + barGap;
+            using var arc = new Pen(color, stroke) { StartCap = LineCap.Round, EndCap = LineCap.Round };
+            g.DrawArc(arc, ring, -90, (float)(Math.Clamp(ratio, 0m, 1m) * 360m));
         }
-
-        return badge;
     }
 
-    private static Rectangle DrawMinimal(Graphics g, ApiConfig api, UsageSnapshot usage, Color color)
+    private static void DrawBacker(Graphics g, ApiConfig api)
     {
-        var badge = new Rectangle(3, 0, 26, 26);
-        using (var brush = new SolidBrush(color)) UiPalette.FillRound(g, brush, badge, 6);
-        DrawBadgeMark(g, api, badge);
+        if (!api.MatchSystemBacker && string.IsNullOrWhiteSpace(api.BackerColor) && api.BackerOpacity <= 0) return;
 
-        var ratio = UsageMath.Ratio(usage) ?? 0m;
-        const float barWidth = 26f;
-        const float barHeight = 3.5f;
-        const float barY = 28f;
-        var fillWidth = Math.Max(2f, barWidth * (float)Math.Clamp(ratio, 0m, 1m));
-        using var track = new SolidBrush(Color.FromArgb(38, Color.White));
-        using var fill = new SolidBrush(UsageMath.ColorForRatio(ratio));
-        UiPalette.FillRound(g, track, new RectangleF(badge.Left, barY, barWidth, barHeight), 1.75f);
-        if (ratio > 0m) UiPalette.FillRound(g, fill, new RectangleF(badge.Left, barY, fillWidth, barHeight), 1.75f);
-        return badge;
-    }
+        var color = api.MatchSystemBacker
+            ? (UiPalette.IsDark ? Color.FromArgb(0xf3, 0xf3, 0xf3) : Color.FromArgb(0x20, 0x20, 0x20))
+            : UsageMath.ColorValue(api.BackerColor, UiPalette.TaskbarSolid);
+        var opacity = Math.Clamp(api.BackerOpacity, 0, 100);
+        if (opacity <= 0) return;
 
-    private static Rectangle DrawRing(Graphics g, ApiConfig api, UsageSnapshot usage, Color color)
-    {
-        var ring = new Rectangle(0, 0, 32, 32);
-        var ratio = UsageMath.Ratio(usage) ?? 0m;
-        using (var track = new SolidBrush(UiPalette.ControlHover)) g.FillEllipse(track, ring);
-        if (ratio > 0)
-        {
-            using var arc = new SolidBrush(UsageMath.ColorForRatio(ratio));
-            g.FillPie(arc, ring, -90, (float)(Math.Clamp(ratio, 0m, 1m) * 360m));
-        }
-
-        var badge = new Rectangle(4, 4, 24, 24);
-        using (var brush = new SolidBrush(color)) g.FillEllipse(brush, badge);
-        DrawBadgeMark(g, api, badge);
-        return badge;
-    }
-
-    private static void DrawBadgeMark(Graphics g, ApiConfig api, Rectangle badge)
-    {
-        var logoPath = ConfigStore.ResolvePath(api.LogoPath);
-        if (logoPath is not null && File.Exists(logoPath))
-        {
-            var inset = badge.Width <= 24 ? 3 : 4;
-            Logo.Draw(g, api, Rectangle.Inflate(badge, -inset, -inset), Color.White, small: true);
-            return;
-        }
-
-        var text = !string.IsNullOrWhiteSpace(api.LogoText) ? api.LogoText : Logo.Initials(api.DisplayName);
-        var px = badge.Width * (text.Length >= 3 ? 0.34f : text.Length == 2 ? 0.42f : 0.52f);
-        using var font = new Font("Segoe UI", px, FontStyle.Bold, GraphicsUnit.Pixel);
-        using var brush = new SolidBrush(Color.White);
-        var measured = g.MeasureString(text, font);
-        g.DrawString(text, font, brush,
-            badge.Left + (badge.Width - measured.Width) / 2f,
-            badge.Top + (badge.Height - measured.Height) / 2f);
+        using var brush = new SolidBrush(Color.FromArgb((int)Math.Round(255 * opacity / 100d), color));
+        g.FillEllipse(brush, 0f, 0f, 32f, 32f);
     }
 
 }
@@ -1143,6 +1107,64 @@ internal static class TextFlow
     }
 }
 
+internal sealed class TooltipPreviewForm : Form
+{
+    private readonly ApiConfig api;
+    private readonly UsageSnapshot usage;
+    private readonly bool stale;
+
+    public TooltipPreviewForm(ApiConfig api, UsageSnapshot usage, bool stale)
+    {
+        this.api = api;
+        this.usage = usage;
+        this.stale = stale;
+        FormBorderStyle = FormBorderStyle.None;
+        ShowInTaskbar = false;
+        AutoScaleMode = AutoScaleMode.Dpi;
+        ClientSize = new Size(288, 150);
+        BackColor = UiPalette.TaskbarSolid;
+        Padding = new Padding(1);
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+        g.Clear(UiPalette.TaskbarSolid);
+
+        var box = new Rectangle(Dpi.Scale(this, 52), Dpi.Scale(this, 42), Dpi.Scale(this, 184), Dpi.Scale(this, 66));
+        using (var back = new SolidBrush(UiPalette.Menu))
+            UiPalette.FillRound(g, back, box, Dpi.Scale(this, 8));
+        using (var border = new Pen(UiPalette.Border2))
+            UiPalette.DrawRound(g, border, box, Dpi.Scale(this, 8));
+
+        using var titleBrush = new SolidBrush(UiPalette.Text);
+        using var textBrush = new SolidBrush(UiPalette.Text2);
+        using var subtleBrush = new SolidBrush(UiPalette.Text3);
+        var titleFont = UiFont.Px(12.5f, bold: true);
+        var bodyFont = UiFont.Px(12f);
+        var smallFont = UiFont.Px(11f);
+
+        g.DrawString(api.DisplayName, titleFont, titleBrush, box.Left + Dpi.Scale(this, 12), box.Top + Dpi.Scale(this, 9));
+        var usageLine = string.Join("     |     ", UsageMath.WindowsForDisplay(usage).Take(2).Select(w =>
+            w.Limit is > 0 ? $"{w.Label}: {Math.Round(w.Used / w.Limit.Value * 100m):0}%" : $"{w.Label}: {Format.Decimal(w.Used)}"));
+        g.DrawString(usageLine, bodyFont, textBrush, box.Left + Dpi.Scale(this, 12), box.Top + Dpi.Scale(this, 30));
+
+        var y = box.Top + Dpi.Scale(this, 49);
+        if (stale)
+        {
+            var status = StatusInfo.For(stale, usage.Message);
+            using var statusBrush = new SolidBrush(status.Color);
+            g.DrawString(status.Label, smallFont, statusBrush, box.Left + Dpi.Scale(this, 12), y);
+            y += Dpi.Scale(this, 16);
+        }
+
+        if (!string.IsNullOrWhiteSpace(usage.Message))
+            g.DrawString(usage.Message, smallFont, subtleBrush, box.Left + Dpi.Scale(this, 12), y);
+    }
+}
+
 internal readonly record struct StatusInfo(string Label, Color Color, Color BannerBg)
 {
     public static StatusInfo For(bool stale, string? message)
@@ -1225,6 +1247,11 @@ internal static class AppIcon
 
 internal static class PreviewRenderer
 {
+    [DllImport("user32.dll")]
+    private static extern bool PrintWindow(IntPtr hwnd, IntPtr hdcBlt, int nFlags);
+
+    private const int PwRenderFullContent = 0x00000002;
+
     public static void Render(string path, ThemeMode theme = ThemeMode.Dark, bool error = false)
     {
         UiPalette.Apply(theme);
@@ -1265,20 +1292,70 @@ internal static class PreviewRenderer
         form.Close();
     }
 
-    public static void RenderSettings(string path)
+    public static void RenderSettings(string path, string? selectedApiId = null, bool scrollBottom = false)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
-        using var form = new SettingsForm(SettingsSampleConfig(), "anthropic")
+        using var form = new SettingsForm(SettingsSampleConfig(), selectedApiId)
         {
             StartPosition = FormStartPosition.Manual,
             Location = new Point(-10000, -10000)
         };
         form.Show();
         Application.DoEvents();
+        if (scrollBottom)
+        {
+            form.ScrollEditorToBottomForPreview();
+            Application.DoEvents();
+        }
         using var bitmap = new Bitmap(form.Width, form.Height);
-        form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.Size));
+        var isGeneral = selectedApiId is null || string.Equals(selectedApiId, SettingsForm.GeneralId, StringComparison.OrdinalIgnoreCase);
+        if (isGeneral)
+        {
+            var hiddenTextBoxes = HideNativeTextInputs(form);
+            RoundedTextBox.SnapshotMode = true;
+            try
+            {
+                form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.Size));
+            }
+            finally
+            {
+                RoundedTextBox.SnapshotMode = false;
+                foreach (var textBox in hiddenTextBoxes) textBox.Visible = true;
+            }
+        }
+        else
+        {
+            form.Invalidate(true);
+            form.Update();
+            using var g = Graphics.FromImage(bitmap);
+            g.Clear(UiPalette.Bg);
+            var hdc = g.GetHdc();
+            try { _ = PrintWindow(form.Handle, hdc, PwRenderFullContent); }
+            finally { g.ReleaseHdc(hdc); }
+            form.PaintSnapshotChrome(g);
+        }
         bitmap.Save(path);
         form.Close();
+    }
+
+    private static List<TextBoxBase> HideNativeTextInputs(Control root)
+    {
+        var hidden = new List<TextBoxBase>();
+        void Walk(Control control)
+        {
+            foreach (Control child in control.Controls)
+            {
+                if (child is TextBoxBase textBox && textBox.Visible)
+                {
+                    textBox.Visible = false;
+                    hidden.Add(textBox);
+                    continue;
+                }
+                Walk(child);
+            }
+        }
+        Walk(root);
+        return hidden;
     }
 
     /// <summary>Render every surface in both themes for visual verification against the prototype.</summary>
@@ -1290,17 +1367,17 @@ internal static class PreviewRenderer
             UiPalette.Apply(mode);
             Render(Path.Combine(dir, $"flyout-ok-{suffix}.png"), mode, error: false);
             Render(Path.Combine(dir, $"flyout-error-{suffix}.png"), mode, error: true);
-            RenderSettings(Path.Combine(dir, $"settings-{suffix}.png"));
+            RenderSettings(Path.Combine(dir, $"settings-general-{suffix}.png"));
+            RenderSettings(Path.Combine(dir, $"settings-general-bottom-{suffix}.png"), SettingsForm.GeneralId, scrollBottom: true);
+            RenderSettings(Path.Combine(dir, $"settings-api-{suffix}.png"), "anthropic");
+            RenderSettings(Path.Combine(dir, $"settings-api-bottom-{suffix}.png"), "anthropic", scrollBottom: true);
             Capture(Path.Combine(dir, $"menu-{suffix}.png"), MenuPreview());
             RenderTrayStrip(Path.Combine(dir, $"tray-{suffix}.png"));
+            RenderTrayBacker(Path.Combine(dir, $"tray-backer-{suffix}.png"));
+            Capture(Path.Combine(dir, $"tooltip-{suffix}.png"), TooltipPreview(mode));
         }
 
         UiPalette.Apply(ThemeMode.Dark);
-        UiPalette.ApplyTray(TrayStyle.Ring);
-        RenderTrayStrip(Path.Combine(dir, "tray-ring.png"));
-        UiPalette.ApplyTray(TrayStyle.Minimal);
-        RenderTrayStrip(Path.Combine(dir, "tray-minimal.png"));
-        UiPalette.ApplyTray(TrayStyle.Bars);
         Capture(Path.Combine(dir, "dialog-presets.png"), new PresetPickerForm());
         Capture(Path.Combine(dir, "dialog-colorpicker.png"), new ColorPickerForm("#5E6AD2", "#D97757"));
         Capture(Path.Combine(dir, "dialog-json.png"), new JsonPreviewForm(SampleConfig()));
@@ -1308,6 +1385,125 @@ internal static class PreviewRenderer
         Capture(Path.Combine(dir, "dialog-logo.png"), new LogoPickerForm(new ApiConfig { Id = "anthropic", DisplayName = "Anthropic", LogoText = "A", BrandColor = "#D97757" }));
         Capture(Path.Combine(dir, "dialog-about.png"), new AboutForm());
         Capture(Path.Combine(dir, "toast.png"), new ToastForm("Settings saved"));
+    }
+
+    public static void RenderSurface(string name, string path)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
+        var normalized = name.Trim().ToLowerInvariant();
+        switch (normalized)
+        {
+            case "flyout-ok-dark":
+                UiPalette.Apply(ThemeMode.Dark);
+                Render(path, ThemeMode.Dark, error: false);
+                break;
+            case "flyout-error-dark":
+                UiPalette.Apply(ThemeMode.Dark);
+                Render(path, ThemeMode.Dark, error: true);
+                break;
+            case "flyout-ok-light":
+                UiPalette.Apply(ThemeMode.Light);
+                Render(path, ThemeMode.Light, error: false);
+                break;
+            case "flyout-error-light":
+                UiPalette.Apply(ThemeMode.Light);
+                Render(path, ThemeMode.Light, error: true);
+                break;
+            case "settings-general-dark":
+                UiPalette.Apply(ThemeMode.Dark);
+                RenderSettings(path);
+                break;
+            case "settings-api-dark":
+                UiPalette.Apply(ThemeMode.Dark);
+                RenderSettings(path, "anthropic");
+                break;
+            case "settings-general-bottom-dark":
+                UiPalette.Apply(ThemeMode.Dark);
+                RenderSettings(path, SettingsForm.GeneralId, scrollBottom: true);
+                break;
+            case "settings-api-bottom-dark":
+                UiPalette.Apply(ThemeMode.Dark);
+                RenderSettings(path, "anthropic", scrollBottom: true);
+                break;
+            case "settings-general-light":
+                UiPalette.Apply(ThemeMode.Light);
+                RenderSettings(path);
+                break;
+            case "settings-api-light":
+                UiPalette.Apply(ThemeMode.Light);
+                RenderSettings(path, "anthropic");
+                break;
+            case "settings-general-bottom-light":
+                UiPalette.Apply(ThemeMode.Light);
+                RenderSettings(path, SettingsForm.GeneralId, scrollBottom: true);
+                break;
+            case "settings-api-bottom-light":
+                UiPalette.Apply(ThemeMode.Light);
+                RenderSettings(path, "anthropic", scrollBottom: true);
+                break;
+            case "menu-dark":
+                UiPalette.Apply(ThemeMode.Dark);
+                Capture(path, MenuPreview());
+                break;
+            case "menu-light":
+                UiPalette.Apply(ThemeMode.Light);
+                Capture(path, MenuPreview());
+                break;
+            case "tray-dark":
+                UiPalette.Apply(ThemeMode.Dark);
+                RenderTrayStrip(path);
+                break;
+            case "tray-light":
+                UiPalette.Apply(ThemeMode.Light);
+                RenderTrayStrip(path);
+                break;
+            case "tray-backer-dark":
+                UiPalette.Apply(ThemeMode.Dark);
+                RenderTrayBacker(path);
+                break;
+            case "tray-backer-light":
+                UiPalette.Apply(ThemeMode.Light);
+                RenderTrayBacker(path);
+                break;
+            case "tooltip-dark":
+                UiPalette.Apply(ThemeMode.Dark);
+                Capture(path, TooltipPreview(ThemeMode.Dark));
+                break;
+            case "tooltip-light":
+                UiPalette.Apply(ThemeMode.Light);
+                Capture(path, TooltipPreview(ThemeMode.Light));
+                break;
+            case "dialog-presets":
+                UiPalette.Apply(ThemeMode.Dark);
+                Capture(path, new PresetPickerForm());
+                break;
+            case "dialog-colorpicker":
+                UiPalette.Apply(ThemeMode.Dark);
+                Capture(path, new ColorPickerForm("#5E6AD2", "#D97757"));
+                break;
+            case "dialog-json":
+                UiPalette.Apply(ThemeMode.Dark);
+                Capture(path, new JsonPreviewForm(SampleConfig()));
+                break;
+            case "dialog-validation":
+                UiPalette.Apply(ThemeMode.Dark);
+                Capture(path, new ValidationForm(new[] { "API name can't be empty.", "The limit for \"Daily\" must be greater than zero." }));
+                break;
+            case "dialog-logo":
+                UiPalette.Apply(ThemeMode.Dark);
+                Capture(path, new LogoPickerForm(new ApiConfig { Id = "anthropic", DisplayName = "Anthropic", LogoText = "A", BrandColor = "#D97757" }));
+                break;
+            case "dialog-about":
+                UiPalette.Apply(ThemeMode.Dark);
+                Capture(path, new AboutForm());
+                break;
+            case "toast":
+                UiPalette.Apply(ThemeMode.Dark);
+                Capture(path, new ToastForm("Settings saved"));
+                break;
+            default:
+                throw new ArgumentException("Unknown render surface: " + name);
+        }
     }
 
     private static void Capture(string path, Form form)
@@ -1336,8 +1532,6 @@ internal static class PreviewRenderer
         new("Open config JSON", "code", () => { }),
         new("Reload config", "refresh", () => { }),
         TrayMenu.Item.Sep,
-        new("About Trayce", "info", () => { }),
-        TrayMenu.Item.Sep,
         new("Start with Windows", "windows", () => { }, Checked: true),
         TrayMenu.Item.Sep,
         new("Quit Trayce", "power", () => { }, Color: UiPalette.Crit)
@@ -1360,6 +1554,49 @@ internal static class PreviewRenderer
         }
 
         bmp.Save(path);
+    }
+
+    private static void RenderTrayBacker(string path)
+    {
+        var api = new ApiConfig
+        {
+            Id = "backer",
+            DisplayName = "Backer",
+            MatchSystemBacker = true,
+            BackerOpacity = 85,
+            TrackOpacity = 30,
+            Usage = new UsageSnapshot
+            {
+                Windows = new List<UsageWindow> { new() { Label = "Hourly", Used = 55, Limit = 100 } }
+            }
+        };
+
+        using var bmp = new Bitmap(150, 96);
+        using var g = Graphics.FromImage(bmp);
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.Clear(UiPalette.TaskbarSolid);
+        using var icon = IconRenderer.Render(api, api.Usage, stale: false);
+        g.DrawIcon(icon, new Rectangle((bmp.Width - 32) / 2, (bmp.Height - 32) / 2, 32, 32));
+        bmp.Save(path);
+    }
+
+    private static Form TooltipPreview(ThemeMode mode)
+    {
+        var api = new ApiConfig
+        {
+            DisplayName = mode == ThemeMode.Light ? "Linear" : "Anthropic",
+            BrandColor = mode == ThemeMode.Light ? "#5E6AD2" : "#D97757"
+        };
+        var usage = new UsageSnapshot
+        {
+            Windows = new List<UsageWindow>
+            {
+                new() { Label = "5h", Used = 720000, Limit = 2000000, Metric = "tokens" },
+                new() { Label = "7d", Used = 26200000, Limit = 70000000, Metric = "tokens" }
+            },
+            Message = mode == ThemeMode.Light ? "" : "Operating normally"
+        };
+        return new TooltipPreviewForm(api, usage, stale: false);
     }
 
     // Mirrors the prototype's seed() data so settings/tray previews match the reference 1:1.
@@ -1447,7 +1684,6 @@ internal static class LiveShot
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
         var config = ConfigStore.Load();
         UiPalette.Apply(SystemTheme.Parse(config.Theme));
-        UiPalette.ApplyTray(TrayStyles.Parse(config.TrayStyle));
 
         // Place the capture on the highest-DPI monitor so HiDPI rendering is actually exercised.
         var target = Screen.AllScreens.OrderByDescending(MonitorDpi).First();
@@ -1614,23 +1850,10 @@ internal static class ConfigStore
         }
     }
 
-    /// <summary>Persist just the global tray-style choice without disturbing in-flight API edits.</summary>
-    public static void SaveTrayStyle(TrayStyle style)
-    {
-        try
-        {
-            var config = Load();
-            config.TrayStyle = TrayStyles.ToConfig(style);
-            Save(config);
-        }
-        catch
-        {
-            // ponytail: cosmetic preference; ignore persistence failures.
-        }
-    }
-
     public static void Validate(TrayceConfig config)
     {
+        config.WarningColor = NormalizeColor(config.WarningColor);
+        config.CriticalColor = NormalizeColor(config.CriticalColor);
         var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var api in config.Apis)
         {
@@ -1639,6 +1862,15 @@ internal static class ConfigStore
             api.PollSeconds = Math.Max(1, api.PollSeconds);
             api.BrandColor = NormalizeColor(api.BrandColor);
             api.CustomColor = NormalizeColor(api.CustomColor);
+            api.BackerColor = NormalizeColor(api.BackerColor);
+            api.TrackColor = NormalizeColor(api.TrackColor);
+            api.WarningColor = NormalizeColor(api.WarningColor);
+            api.CriticalColor = NormalizeColor(api.CriticalColor);
+            api.RingMode = string.Equals(api.RingMode, "primary", StringComparison.OrdinalIgnoreCase) ? "primary" : "busiest";
+            api.WarningThreshold = Math.Clamp(api.WarningThreshold, 1, 99);
+            api.CriticalThreshold = Math.Clamp(api.CriticalThreshold, api.WarningThreshold + 1, 100);
+            api.BackerOpacity = Math.Clamp(api.BackerOpacity, 0, 100);
+            api.TrackOpacity = Math.Clamp(api.TrackOpacity, 0, 100);
             if (!api.UseBrandColor && string.IsNullOrWhiteSpace(api.CustomColor)) api.UseBrandColor = true;
             api.Usage?.Normalize();
             ValidateWindows(api.Id, api.Usage?.Windows ?? new List<UsageWindow>());
@@ -1819,39 +2051,6 @@ internal sealed class ColorSwatch : Control
     {
         try { return ColorTranslator.FromHtml(value); }
         catch { return UiPalette.Accent2; }
-    }
-}
-
-internal sealed class TrayPreview : Control
-{
-    private readonly ApiConfig api;
-
-    public TrayPreview(ApiConfig api)
-    {
-        this.api = api;
-        DoubleBuffered = true;
-    }
-
-    protected override void OnPaint(PaintEventArgs e)
-    {
-        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-        e.Graphics.Clear(UiPalette.Backdrop(this, UiPalette.Card));
-        using var back = new SolidBrush(Color.FromArgb(38, 38, 40));
-        using var border = new Pen(UiPalette.Border2);
-        var rect = new Rectangle(0, 0, Width - 1, Height - 1);
-        UiPalette.FillRound(e.Graphics, back, rect, Dpi.Scale(this, 7));
-        UiPalette.DrawRound(e.Graphics, border, rect, Dpi.Scale(this, 7));
-        var badge = new Rectangle(Width - Dpi.Scale(this, 31), Dpi.Scale(this, 7), Dpi.Scale(this, 19), Dpi.Scale(this, 19));
-        using var color = new SolidBrush(Brand.Color(api, UiPalette.Accent2));
-        UiPalette.FillRound(e.Graphics, color, badge, Dpi.Scale(this, 5));
-        Logo.Draw(e.Graphics, api, Rectangle.Inflate(badge, -Dpi.Scale(this, 4), -Dpi.Scale(this, 4)), Color.White, small: true);
-        using var accent = new SolidBrush(UiPalette.Accent);
-        using var track = new SolidBrush(Color.FromArgb(38, Color.White));
-        var x = Width - Dpi.Scale(this, 29);
-        UiPalette.FillRound(e.Graphics, track, new RectangleF(x, Dpi.Scale(this, 28), Dpi.Scale(this, 16), Dpi.Scale(this, 2.5f)), Dpi.Scale(this, 1.5f));
-        UiPalette.FillRound(e.Graphics, accent, new RectangleF(x, Dpi.Scale(this, 28), Dpi.Scale(this, 13), Dpi.Scale(this, 2.5f)), Dpi.Scale(this, 1.5f));
-        UiPalette.FillRound(e.Graphics, track, new RectangleF(x, Dpi.Scale(this, 32), Dpi.Scale(this, 16), Dpi.Scale(this, 2.5f)), Dpi.Scale(this, 1.5f));
-        UiPalette.FillRound(e.Graphics, accent, new RectangleF(x, Dpi.Scale(this, 32), Dpi.Scale(this, 9), Dpi.Scale(this, 2.5f)), Dpi.Scale(this, 1.5f));
     }
 }
 
@@ -2174,12 +2373,14 @@ internal sealed class TrayceConfig
     public List<ApiConfig> Apis { get; set; } = new();
 
     public bool AutoApplyPresetIcons { get; set; } = true;
+    public bool StatusDots { get; set; } = true;
+    public bool MatchSystemBacker { get; set; } = true;
+    public string? WarningColor { get; set; }
+    public string? CriticalColor { get; set; }
 
     /// <summary>"system" (default), "light", or "dark".</summary>
     public string? Theme { get; set; }
 
-    /// <summary>"bars" (default), "ring", or "minimal".</summary>
-    public string? TrayStyle { get; set; }
 }
 
 internal sealed class ApiConfig
@@ -2192,6 +2393,18 @@ internal sealed class ApiConfig
     public string? BrandColor { get; set; }
     public bool UseBrandColor { get; set; } = true;
     public string? CustomColor { get; set; }
+    public bool ShowStatusDot { get; set; } = true;
+    public string? RingMode { get; set; } = "busiest";
+    public int WarningThreshold { get; set; } = 70;
+    public int CriticalThreshold { get; set; } = 90;
+    public bool MatchSystemBacker { get; set; } = true;
+    public string? BackerColor { get; set; }
+    public int BackerOpacity { get; set; } = 85;
+    public bool TrackMatchesRing { get; set; } = true;
+    public string? TrackColor { get; set; }
+    public int TrackOpacity { get; set; } = 30;
+    public string? WarningColor { get; set; }
+    public string? CriticalColor { get; set; }
     public string? ApiKey { get; set; }
     public string? SourceUrl { get; set; }
     public int PollSeconds { get; set; } = 300;
@@ -2277,10 +2490,11 @@ internal sealed class UsageWindow
 
 internal static class UsageMath
 {
-    public static decimal? Ratio(UsageSnapshot usage)
+    public static decimal? Ratio(UsageSnapshot usage, ApiConfig? api = null)
     {
         var ratios = Ratios(usage).ToList();
-        return ratios.Count == 0 ? null : ratios.Max();
+        if (ratios.Count == 0) return null;
+        return string.Equals(api?.RingMode, "primary", StringComparison.OrdinalIgnoreCase) ? ratios[0] : ratios.Max();
     }
 
     public static IEnumerable<decimal> Ratios(UsageSnapshot usage)
@@ -2308,19 +2522,28 @@ internal static class UsageMath
         return "?";
     }
 
-    public static Color ColorFor(UsageSnapshot usage, bool stale)
+    public static Color ColorFor(UsageSnapshot usage, bool stale, ApiConfig? api = null)
     {
         if (stale) return UiPalette.Warn;
-        var ratio = Ratio(usage);
+        var ratio = Ratio(usage, api);
         if (!ratio.HasValue) return UiPalette.Text3;
-        return ColorForRatio(ratio.Value);
+        return ColorForRatio(ratio.Value, api);
     }
 
-    public static Color ColorForRatio(decimal ratio)
+    public static Color ColorForRatio(decimal ratio, ApiConfig? api = null)
     {
-        if (ratio >= 0.9m) return UiPalette.Crit;
-        if (ratio >= 0.7m) return UiPalette.Warn;
+        var warning = (api?.WarningThreshold ?? 70) / 100m;
+        var critical = (api?.CriticalThreshold ?? 90) / 100m;
+        if (ratio >= critical) return ColorValue(api?.CriticalColor, UiPalette.Crit);
+        if (ratio >= warning) return ColorValue(api?.WarningColor, UiPalette.Warn);
         return UiPalette.Accent;
+    }
+
+    public static Color ColorValue(string? value, Color fallback)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return fallback;
+        try { return ColorTranslator.FromHtml(value); }
+        catch { return fallback; }
     }
 
     public static List<UsageWindow> WindowsForDisplay(UsageSnapshot usage)
@@ -2474,16 +2697,11 @@ internal static class SelfTest
         };
         Check(PresetIconCatalog.Apply(configWithMissingIcon), "preset config apply changed");
         Check(configWithMissingIcon.Apis[0].LogoPath == PresetIcons.Anthropic && configWithMissingIcon.Apis[0].BrandColor == "#D97757", "preset config apply values");
-        var customLogo = Path.GetTempFileName();
-        try
-        {
-            var custom = new ApiConfig { Id = "openai", DisplayName = "OpenAI", LogoPath = customLogo, LogoText = "X", BrandColor = "#123456" };
-            Check(!PresetIconCatalog.Apply(custom), "preset preserves custom values");
-        }
-        finally
-        {
-            File.Delete(customLogo);
-        }
+        var customLogo = Path.Combine(AppContext.BaseDirectory, "assets", "trayce.svg");
+        if (!File.Exists(customLogo)) customLogo = Path.Combine(Environment.CurrentDirectory, "assets", "trayce.svg");
+        Check(File.Exists(customLogo), "custom logo fixture");
+        var custom = new ApiConfig { Id = "openai", DisplayName = "OpenAI", LogoPath = customLogo, LogoText = "X", BrandColor = "#123456" };
+        Check(!PresetIconCatalog.Apply(custom), "preset preserves custom values");
 
         using var controller = new DetailsPopupController();
         var first = new DetailsForm(api, windowed, stale: false, previewMode: true);
