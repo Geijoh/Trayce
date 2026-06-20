@@ -449,7 +449,7 @@ internal sealed class PercentSlider : Control
             g.DrawEllipse(stroke, thumbRect);
 
         using var text = new SolidBrush(Enabled ? UiPalette.Text : UiPalette.Text3);
-        using var font = UiFont.Px(12.5f);
+        var font = UiFont.Px(12.5f);
         var label = Value + "%";
         var size = g.MeasureString(label, font);
         g.DrawString(label, font, text, Dpi.Scale(this, 106) + (Dpi.Scale(this, 38) - size.Width), (Height - size.Height) / 2f);

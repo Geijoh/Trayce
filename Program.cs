@@ -2723,7 +2723,7 @@ internal static class SelfTest
         }
         finally
         {
-            File.Delete(previewPath);
+            TryDelete(previewPath);
         }
 
         var config = new TrayceConfig
@@ -2761,12 +2761,28 @@ internal static class SelfTest
         }
         finally
         {
-            File.Delete(statePath);
+            TryDelete(statePath);
         }
     }
 
     private static void Check(bool condition, string name)
     {
         if (!condition) throw new InvalidOperationException("Self-test failed: " + name);
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            if (!File.Exists(path)) return;
+            File.SetAttributes(path, FileAttributes.Normal);
+            File.Delete(path);
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
     }
 }
