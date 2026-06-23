@@ -111,11 +111,18 @@ internal sealed class RoundedButton : Control
         Text = text;
         DoubleBuffered = true;
         Cursor = Cursors.Hand;
+        SetStyle(ControlStyles.Selectable, true);
         Height = 32;
+        A11y.Button(this, text);
     }
 
     protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
     protected override void OnMouseLeave(EventArgs e) { hover = false; Invalidate(); base.OnMouseLeave(e); }
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        A11y.InvokeOnEnterOrSpace(e, () => OnClick(EventArgs.Empty));
+        base.OnKeyDown(e);
+    }
 
     protected override void OnPaint(PaintEventArgs e)
     {
@@ -166,6 +173,10 @@ internal sealed class SegmentedToggle : Control
         SelectedIndex = selected;
         DoubleBuffered = true;
         Cursor = Cursors.Hand;
+        SetStyle(ControlStyles.Selectable, true);
+        TabStop = true;
+        AccessibleRole = AccessibleRole.PushButton;
+        AccessibleName = string.Join(" / ", options);
         Height = 26;
         Width = options.Length * 56;
     }
@@ -184,6 +195,42 @@ internal sealed class SegmentedToggle : Control
         }
 
         base.OnMouseDown(e);
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        if (Disabled)
+        {
+            base.OnKeyDown(e);
+            return;
+        }
+
+        var next = SelectedIndex;
+        if (e.KeyCode is Keys.Left or Keys.Up)
+        {
+            next = Math.Max(0, SelectedIndex - 1);
+        }
+        else if (e.KeyCode is Keys.Right or Keys.Down or Keys.Enter or Keys.Space)
+        {
+            next = e.KeyCode is Keys.Enter or Keys.Space
+                ? (SelectedIndex + 1) % options.Length
+                : Math.Min(options.Length - 1, SelectedIndex + 1);
+        }
+        else
+        {
+            base.OnKeyDown(e);
+            return;
+        }
+
+        if (next != SelectedIndex)
+        {
+            SelectedIndex = next;
+            Invalidate();
+            SelectionChanged?.Invoke(this, EventArgs.Empty);
+        }
+        e.Handled = true;
+        e.SuppressKeyPress = true;
+        base.OnKeyDown(e);
     }
 
     protected override void OnPaint(PaintEventArgs e)
@@ -256,6 +303,10 @@ internal sealed class SelectBox : Control
         selectedIndex = Math.Max(0, Array.FindIndex(options, item => string.Equals(item, selected, StringComparison.OrdinalIgnoreCase)));
         DoubleBuffered = true;
         Cursor = Cursors.Hand;
+        SetStyle(ControlStyles.Selectable, true);
+        TabStop = true;
+        AccessibleRole = AccessibleRole.ComboBox;
+        AccessibleName = "Select value";
         Height = 31;
     }
 
@@ -265,6 +316,24 @@ internal sealed class SelectBox : Control
     {
         base.OnMouseDown(e);
         if (e.Button == MouseButtons.Left && Enabled) ShowMenu();
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        if (!Enabled)
+        {
+            base.OnKeyDown(e);
+            return;
+        }
+
+        if (e.KeyCode is Keys.Enter or Keys.Space or Keys.Down)
+        {
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+            ShowMenu();
+        }
+
+        base.OnKeyDown(e);
     }
 
     private void ShowMenu()
@@ -332,11 +401,18 @@ internal sealed class ColorField : Control
         this.hex = hex;
         DoubleBuffered = true;
         Cursor = Cursors.Hand;
+        SetStyle(ControlStyles.Selectable, true);
+        A11y.Button(this, "Choose color " + hex);
         Size = new Size(120, 31);
     }
 
     protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
     protected override void OnMouseLeave(EventArgs e) { hover = false; Invalidate(); base.OnMouseLeave(e); }
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        A11y.InvokeOnEnterOrSpace(e, () => OnClick(EventArgs.Empty));
+        base.OnKeyDown(e);
+    }
 
     protected override void OnPaint(PaintEventArgs e)
     {
@@ -389,6 +465,8 @@ internal sealed class PercentSlider : Control
         this.value = Math.Clamp(value, 0, 100);
         DoubleBuffered = true;
         Cursor = Cursors.Hand;
+        SetStyle(ControlStyles.Selectable, true);
+        A11y.Slider(this, "Percentage");
         Size = new Size(148, 31);
     }
 
@@ -413,6 +491,32 @@ internal sealed class PercentSlider : Control
         dragging = false;
         Capture = false;
         base.OnMouseUp(e);
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        if (!Enabled)
+        {
+            base.OnKeyDown(e);
+            return;
+        }
+
+        var next = Value;
+        if (e.KeyCode is Keys.Left or Keys.Down) next -= 5;
+        else if (e.KeyCode is Keys.Right or Keys.Up) next += 5;
+        else if (e.KeyCode == Keys.Home) next = 0;
+        else if (e.KeyCode == Keys.End) next = 100;
+        else
+        {
+            base.OnKeyDown(e);
+            return;
+        }
+
+        Value = next;
+        ValueChanged?.Invoke(Value);
+        e.Handled = true;
+        e.SuppressKeyPress = true;
+        base.OnKeyDown(e);
     }
 
     private void SetFromX(int x)
@@ -471,11 +575,18 @@ internal sealed class ApiListItem : Control
         this.selected = selected;
         DoubleBuffered = true;
         Cursor = Cursors.Hand;
+        SetStyle(ControlStyles.Selectable, true);
+        A11y.Button(this, api.DisplayName, "Select tracked API");
         Height = 52;
     }
 
     protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
     protected override void OnMouseLeave(EventArgs e) { hover = false; Invalidate(); base.OnMouseLeave(e); }
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        A11y.InvokeOnEnterOrSpace(e, () => OnClick(EventArgs.Empty));
+        base.OnKeyDown(e);
+    }
 
     // Draw proportional to the control's actual height so nothing clips regardless of DPI scaling.
     protected override void OnPaint(PaintEventArgs e)
@@ -554,11 +665,18 @@ internal sealed class GeneralListItem : Control
         this.selected = selected;
         DoubleBuffered = true;
         Cursor = Cursors.Hand;
+        SetStyle(ControlStyles.Selectable, true);
+        A11y.Button(this, "General", "Open app defaults");
         Height = 52;
     }
 
     protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
     protected override void OnMouseLeave(EventArgs e) { hover = false; Invalidate(); base.OnMouseLeave(e); }
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        A11y.InvokeOnEnterOrSpace(e, () => OnClick(EventArgs.Empty));
+        base.OnKeyDown(e);
+    }
 
     protected override void OnPaint(PaintEventArgs e)
     {
@@ -739,8 +857,8 @@ internal sealed class SettingsForm : Form
         AutoScaleMode = AutoScaleMode.Dpi;
         StartPosition = FormStartPosition.CenterScreen;
         FormBorderStyle = FormBorderStyle.None;
-        MinimumSize = new Size(S(840), S(560));
-        ClientSize = new Size(940, 680);
+        MinimumSize = new Size(S(980), S(620));
+        ClientSize = new Size(1120, 740);
         BackColor = UiPalette.Bg;
         Font = UiFont.Px(13f);
         KeyPreview = true;
@@ -933,7 +1051,7 @@ internal sealed class SettingsForm : Form
 
     private Control BuildSidebar()
     {
-        var sidebar = new Panel { Dock = DockStyle.Left, Width = S(282), BackColor = UiPalette.Bg2 };
+        var sidebar = new Panel { Dock = DockStyle.Left, Width = S(312), BackColor = UiPalette.Bg2 };
         sidebarPanel = sidebar;
         sidebar.Controls.Add(sidebarList);
         var top = new Panel { Dock = DockStyle.Top, Height = S(94), BackColor = UiPalette.Bg2 };
@@ -1071,17 +1189,17 @@ internal sealed class SettingsForm : Form
             }
 
             var api = SelectedApi();
-            var width = Math.Max(S(420), editor.ClientSize.Width - S(48) - (editor.VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0));
+            var width = Math.Max(S(560), editor.ClientSize.Width - S(48) - (editor.VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0));
             var y = S(20);
 
-            var nameField = TextField(api.DisplayName, v => { api.DisplayName = v; MarkDirty(); RenderSidebar(); }, 260);
+            var nameField = TextField(api.DisplayName, v => { api.DisplayName = v; MarkDirty(); RenderSidebar(); }, 320);
             nameField.Box.Leave += (_, _) => ApplySmartIcon(api);
-            var sourceField = TextField(api.SourceUrl ?? "", v => { api.SourceUrl = v; MarkDirty(); }, 330, mono: true, placeholder: "https://api.example.com/usage");
+            var sourceField = TextField(api.SourceUrl ?? "", v => { api.SourceUrl = v; MarkDirty(); }, 430, mono: true, placeholder: "https://api.example.com/usage");
             sourceField.Box.Leave += (_, _) => ApplySmartIcon(api);
 
             Section("Identity", ref y, width, Card(width,
                 Row("API name", null, nameField),
-                Row("Provider / service type", null, TextField(api.Provider ?? "", v => { api.Provider = v; MarkDirty(); }, 260, placeholder: "Optional")),
+                Row("Provider / service type", null, TextField(api.Provider ?? "", v => { api.Provider = v; MarkDirty(); }, 320, placeholder: "Optional")),
                 LogoRow(api)));
 
             Section("Appearance", ref y, width, Card(width,
@@ -1127,7 +1245,7 @@ internal sealed class SettingsForm : Form
 
     private void RenderGeneralEditor()
     {
-        var width = Math.Max(S(420), editor.ClientSize.Width - S(48) - (editor.VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0));
+        var width = Math.Max(S(560), editor.ClientSize.Width - S(48) - (editor.VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0));
         var y = S(20);
 
         Section("Appearance", ref y, width, Card(width,
@@ -1177,6 +1295,7 @@ internal sealed class SettingsForm : Form
 
     private Control Row(string title, string? subtitle, Control right, bool muted = false)
     {
+        ApplyAccessibleLabel(right, title, subtitle);
         var leftHeight = subtitle is null ? S(20) : S(38);
         var height = Math.Max(right.Height, leftHeight) + S(subtitle is null ? 26 : 20);
         var row = new Panel { Height = height, BackColor = Color.Transparent };
@@ -1211,8 +1330,8 @@ internal sealed class SettingsForm : Form
         void Place()
         {
             var maxLeft = row.Width - right.Width - S(16);
-            var preferred = S(290);
-            var left = Math.Max(S(210), Math.Min(maxLeft, preferred));
+            var preferred = S(330);
+            var left = Math.Max(S(230), Math.Min(maxLeft, preferred));
             right.Location = new Point(left, (row.Height - right.Height) / 2);
             var labelWidth = Math.Max(S(150), right.Left - titleLabel.Left - S(24));
             titleLabel.Width = labelWidth;
@@ -1224,14 +1343,29 @@ internal sealed class SettingsForm : Form
         return row;
     }
 
+    private static void ApplyAccessibleLabel(Control control, string title, string? subtitle)
+    {
+        if (control is RoundedTextBox textBox)
+        {
+            textBox.Box.AccessibleName = title;
+            if (!string.IsNullOrWhiteSpace(subtitle)) textBox.Box.AccessibleDescription = subtitle;
+        }
+        else if (control is SelectBox or SegmentedToggle or PercentSlider or ColorField)
+        {
+            control.AccessibleName = title;
+            if (!string.IsNullOrWhiteSpace(subtitle)) control.AccessibleDescription = subtitle;
+        }
+    }
+
     private Control LogoRow(ApiConfig api)
     {
-        var wrap = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = false, BackColor = Color.Transparent, Size = Z(258, 35) };
+        var wrap = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = false, BackColor = Color.Transparent, Size = Z(330, 35) };
         wrap.Controls.Add(new LogoBadge(api) { Size = Z(34, 34), Radius = 8, Margin = G(0, 0, 10, 0) });
         var initials = TextField(api.LogoText ?? Logo.Initials(api.DisplayName), v => { api.LogoText = v[..Math.Min(3, v.Length)]; MarkDirty(); RenderSidebar(); }, 54, centered: true);
+        initials.Box.AccessibleName = "Logo initials";
         initials.Margin = G(0, 0, 10, 0);
         wrap.Controls.Add(initials);
-        var choose = new RoundedButton("Choose image…") { Size = Z(150, 31), Margin = G(0, 1, 0, 0) };
+        var choose = new RoundedButton("Choose image…") { Size = Z(180, 31), Margin = G(0, 1, 0, 0) };
         choose.Click += (_, _) => ChooseLogo(api);
         wrap.Controls.Add(choose);
         return Row("Logo", "Image, or falls back to initials", wrap);
@@ -1240,6 +1374,7 @@ internal sealed class SettingsForm : Form
     private Control AutoIconRow()
     {
         var toggle = new ToggleSwitch(autoApplyPresetIcons) { Size = Z(40, 21) };
+        A11y.CheckBox(toggle, "Auto-match LobeHub icons", "Updates missing/default logos and colors");
         toggle.Click += (_, _) =>
         {
             autoApplyPresetIcons = !autoApplyPresetIcons;
@@ -1278,6 +1413,7 @@ internal sealed class SettingsForm : Form
     private Control ToggleRow(string title, string? subtitle, bool value, Action<bool> set)
     {
         var toggle = new ToggleSwitch(value) { Size = Z(40, 21) };
+        A11y.CheckBox(toggle, title, subtitle);
         toggle.Click += (_, _) =>
         {
             set(!value);
@@ -1310,6 +1446,7 @@ internal sealed class SettingsForm : Form
             MarkDirty();
             RenderSidebar();
         }, 44, centered: true);
+        warn.Box.AccessibleName = "Warning threshold";
         warn.Margin = G(0, 0, 5, 0);
         var slash = new Label { AutoSize = false, Size = Z(11, 31), Text = "/", TextAlign = ContentAlignment.MiddleCenter, ForeColor = UiPalette.Text3, Font = UiFont.Px(12.5f), Margin = G(0, 0, 5, 0) };
         var crit = TextField(api.CriticalThreshold.ToString(), v =>
@@ -1318,6 +1455,7 @@ internal sealed class SettingsForm : Form
             MarkDirty();
             RenderSidebar();
         }, 44, centered: true);
+        crit.Box.AccessibleName = "Critical threshold";
         crit.Margin = G(0, 0, 5, 0);
         var pct = new Label { AutoSize = false, Size = Z(18, 31), Text = "%", TextAlign = ContentAlignment.MiddleLeft, ForeColor = UiPalette.Text3, Font = UiFont.Px(12.5f) };
         wrap.Controls.Add(warn);
@@ -1356,15 +1494,18 @@ internal sealed class SettingsForm : Form
 
     private Control ApiKeyRow(ApiConfig api)
     {
-        var wrap = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = false, BackColor = Color.Transparent, Size = Z(294, 31) };
-        var key = TextField(api.ApiKey ?? "", v => { api.ApiKey = v; MarkDirty(); }, 220, mono: true);
+        var wrap = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = false, BackColor = Color.Transparent, Size = Z(430, 31) };
+        var key = TextField(api.ApiKey ?? "", v => { api.ApiKey = v; MarkDirty(); }, 344, mono: true);
+        key.Box.AccessibleName = "API key";
         key.Password = !revealKey;
         key.Margin = G(0, 0, 6, 0);
         wrap.Controls.Add(key);
         var reveal = new GlyphButton { Glyph = "eye", Size = Z(31, 31), Margin = G(0, 0, 6, 0) };
+        reveal.AccessibleName = revealKey ? "Hide API key" : "Show API key";
         reveal.Click += (_, _) => { revealKey = !revealKey; RenderEditor(); };
         wrap.Controls.Add(reveal);
         var copy = new GlyphButton { Glyph = "copy", Size = Z(31, 31) };
+        copy.AccessibleName = "Copy API key";
         copy.Click += (_, _) => { Clipboard.SetText(api.ApiKey ?? ""); Toaster.Show(this, "API key copied"); };
         wrap.Controls.Add(copy);
         return Row("API key", "Stored in Windows Credential Manager - config JSON keeps metadata only.", wrap);
@@ -1382,8 +1523,10 @@ internal sealed class SettingsForm : Form
             MarkDirty();
             RenderSidebar();
         }, 66);
+        num.Box.AccessibleName = "Poll cadence amount";
         num.Margin = G(0, 0, 9, 0);
         var units = Combo(new[] { "seconds", "minutes", "hours" }, parts.Unit);
+        units.AccessibleName = "Poll cadence unit";
         units.SelectedIndexChanged += (_, _) =>
         {
             if (int.TryParse(num.Text, out var n)) api.PollSeconds = PollSeconds(Math.Max(1, n), units.Text);
@@ -1430,14 +1573,17 @@ internal sealed class SettingsForm : Form
         var card = new RoundedPanel { Size = new Size(width, S(116)), Back = UiPalette.Card, Stroke = UiPalette.Border, Radius = 8 };
 
         var label = TextField(window.Label, v => { window.Label = v; MarkDirty(); }, 108);
+        label.Box.AccessibleName = "Usage window label";
         label.Location = P(14, 13);
         var metric = Combo(new[] { "tokens", "requests", "calls", "dollars" }, window.Metric ?? "requests");
+        metric.AccessibleName = "Usage window metric";
         metric.Location = P(130, 13);
         metric.SelectedIndexChanged += (_, _) => { window.Metric = metric.Text; MarkDirty(); RenderEditor(); };
 
         var ratio = window.Limit is > 0 ? Math.Clamp(window.Used / window.Limit.Value, 0m, 1m) : 0m;
         var pctLabel = new Label { AutoSize = false, TextAlign = ContentAlignment.MiddleRight, Location = new Point(width - S(88), S(17)), Size = Z(44, 20), Text = Math.Round((window.Limit is > 0 ? window.Used / window.Limit.Value : 0m) * 100).ToString("0") + "%", ForeColor = UsageMath.ColorForRatio(ratio), Font = UiFont.Px(13f, bold: true) };
         var delete = new GlyphButton { Glyph = "trash", Location = new Point(width - S(44), S(13)), Size = Z(30, 30), GlyphColor = UiPalette.Text3 };
+        delete.AccessibleName = "Delete usage window";
         delete.Click += (_, _) => { api.Usage?.Windows.Remove(window); MarkDirty(); RenderEditor(); };
 
         var bar = new ProgressStrip(window.Limit is > 0 ? window.Used / window.Limit.Value : 0m) { Location = P(14, 50), Size = new Size(width - S(28), S(6)) };
@@ -1469,6 +1615,7 @@ internal sealed class SettingsForm : Form
         var wrap = new Panel { Size = new Size(w, S(46)), BackColor = Color.Transparent };
         wrap.Controls.Add(new Label { Location = Point.Empty, Size = new Size(w, S(13)), Text = title.ToUpperInvariant(), ForeColor = UiPalette.Text3, Font = UiFont.Px(10.5f, bold: true) });
         var field = TextField(value, set, w, scaledWidth: true);
+        field.Box.AccessibleName = title;
         field.Size = new Size(w, S(29));
         field.Location = new Point(0, S(16));
         wrap.Controls.Add(field);

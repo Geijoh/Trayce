@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Svg;
 using System.ComponentModel;
 using System.Windows.Forms;
@@ -17,6 +18,7 @@ internal static class Program
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
+        ErrorReporter.Install();
 
         if (args.Contains("--self-test"))
         {
@@ -317,7 +319,19 @@ internal sealed class TrayceContext : ApplicationContext
             throw new InvalidOperationException("sourceUrl must be http or https");
         }
 
-        await using var stream = await http.GetStreamAsync(uri);
+        using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+        if (!string.IsNullOrWhiteSpace(api.ApiKey))
+        {
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", api.ApiKey);
+        }
+
+        using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"usage endpoint returned {(int)response.StatusCode} {response.ReasonPhrase}");
+        }
+
+        await using var stream = await response.Content.ReadAsStreamAsync();
         var snapshot = await JsonSerializer.DeserializeAsync<UsageSnapshot>(stream, ConfigStore.JsonOptions);
         return snapshot?.Normalize().WithObservedAt(DateTimeOffset.Now) ?? throw new InvalidOperationException("usage endpoint returned empty JSON");
     }
@@ -596,8 +610,19 @@ internal sealed class DetailsPopupController : IDisposable
 internal sealed class GlyphButton : Control
 {
     private bool hover;
+    private string glyph = "";
 
-    public string Glyph { get; set; } = "";
+    public string Glyph
+    {
+        get => glyph;
+        set
+        {
+            glyph = value ?? "";
+            AccessibleName = NameForGlyph(glyph);
+            Invalidate();
+        }
+    }
+
     public Color GlyphColor { get; set; } = UiPalette.Text2;
     public bool UseAccentFill { get; set; }
 
@@ -605,7 +630,9 @@ internal sealed class GlyphButton : Control
     {
         DoubleBuffered = true;
         Cursor = Cursors.Hand;
+        SetStyle(ControlStyles.Selectable, true);
         Size = new Size(32, 32);
+        A11y.Button(this, "Icon button");
     }
 
     protected override void OnMouseEnter(EventArgs e)
@@ -622,6 +649,12 @@ internal sealed class GlyphButton : Control
         base.OnMouseLeave(e);
     }
 
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        A11y.InvokeOnEnterOrSpace(e, () => OnClick(EventArgs.Empty));
+        base.OnKeyDown(e);
+    }
+
     protected override void OnPaint(PaintEventArgs e)
     {
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
@@ -633,6 +666,18 @@ internal sealed class GlyphButton : Control
         UiPalette.DrawRound(e.Graphics, border, rect, Dpi.Scale(this, 7));
         IconPainter.Draw(e.Graphics, Glyph, new Rectangle(Dpi.Scale(this, 8), Dpi.Scale(this, 8), Width - Dpi.Scale(this, 16), Height - Dpi.Scale(this, 16)), UseAccentFill ? Color.White : GlyphColor);
     }
+
+    private static string NameForGlyph(string glyph) => glyph.ToLowerInvariant() switch
+    {
+        "copy" => "Copy",
+        "eye" => "Show or hide",
+        "refresh" => "Refresh",
+        "trash" => "Delete",
+        "power" => "Quit",
+        "settings" => "Settings",
+        "close" => "Close",
+        _ => "Icon button"
+    };
 }
 
 internal static class IconPainter
@@ -1754,12 +1799,19 @@ internal static class ConfigStore
     public static TrayceConfig Load()
     {
         EnsureSample();
-        var config = JsonSerializer.Deserialize<TrayceConfig>(File.ReadAllText(ConfigPath), JsonOptions) ?? new TrayceConfig();
+        var json = File.ReadAllText(ConfigPath);
+        var config = JsonSerializer.Deserialize<TrayceConfig>(json, JsonOptions) ?? new TrayceConfig();
+        var migratedSecrets = LoadApiKeys(config, json);
         Validate(config);
         if (config.AutoApplyPresetIcons && PresetIconCatalog.Apply(config))
         {
             try { Save(config); }
             catch { } // ponytail: auto-fill is cosmetic; failed persistence should not block app launch.
+        }
+        else if (migratedSecrets)
+        {
+            try { Save(config); }
+            catch { }
         }
         return config;
     }
@@ -1830,6 +1882,7 @@ internal static class ConfigStore
     {
         Validate(config);
         Directory.CreateDirectory(AppDir);
+        SaveApiKeys(config);
         var temp = ConfigPath + ".tmp";
         File.WriteAllText(temp, JsonSerializer.Serialize(config, JsonOptions));
         File.Move(temp, ConfigPath, overwrite: true);
@@ -1900,6 +1953,101 @@ internal static class ConfigStore
             return value;
         }
     }
+
+    private static bool LoadApiKeys(TrayceConfig config, string json)
+    {
+        var legacyKeys = LegacyApiKeys(json);
+        var migrated = false;
+        foreach (var api in config.Apis)
+        {
+            if (legacyKeys.TryGetValue(api.Id, out var legacyKey) && !string.IsNullOrEmpty(legacyKey))
+            {
+                api.ApiKey = legacyKey;
+                CredentialStore.Set(api.Id, legacyKey);
+                migrated = true;
+            }
+            else
+            {
+                api.ApiKey = CredentialStore.Get(api.Id) ?? "";
+            }
+        }
+
+        return migrated;
+    }
+
+    private static Dictionary<string, string> LegacyApiKeys(string json)
+    {
+        var keys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (!doc.RootElement.TryGetProperty("apis", out var apis) || apis.ValueKind != JsonValueKind.Array) return keys;
+            foreach (var api in apis.EnumerateArray())
+            {
+                if (!TryGetString(api, "id", out var id) || string.IsNullOrWhiteSpace(id)) continue;
+                if (TryGetString(api, "apiKey", out var key) || TryGetString(api, "ApiKey", out key))
+                {
+                    keys[id] = key ?? "";
+                }
+            }
+        }
+        catch
+        {
+        }
+
+        return keys;
+    }
+
+    private static bool TryGetString(JsonElement element, string name, out string? value)
+    {
+        foreach (var property in element.EnumerateObject())
+        {
+            if (!string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase)) continue;
+            value = property.Value.ValueKind == JsonValueKind.String ? property.Value.GetString() : property.Value.ToString();
+            return true;
+        }
+
+        value = null;
+        return false;
+    }
+
+    private static void SaveApiKeys(TrayceConfig config)
+    {
+        var currentIds = config.Apis.Select(api => api.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var previousId in ExistingApiIds().Where(id => !currentIds.Contains(id)))
+        {
+            CredentialStore.Delete(previousId);
+        }
+
+        foreach (var api in config.Apis)
+        {
+            CredentialStore.Set(api.Id, api.ApiKey);
+        }
+    }
+
+    private static IEnumerable<string> ExistingApiIds()
+    {
+        if (!File.Exists(ConfigPath)) yield break;
+
+        JsonDocument doc;
+        try
+        {
+            doc = JsonDocument.Parse(File.ReadAllText(ConfigPath));
+        }
+        catch
+        {
+            yield break;
+        }
+
+        using (doc)
+        {
+            if (!doc.RootElement.TryGetProperty("apis", out var apis) || apis.ValueKind != JsonValueKind.Array) yield break;
+            foreach (var api in apis.EnumerateArray())
+            {
+                if (TryGetString(api, "id", out var id) && !string.IsNullOrWhiteSpace(id)) yield return id;
+            }
+        }
+    }
 }
 
 internal sealed class RoundedPanel : Panel
@@ -1961,6 +2109,14 @@ internal sealed class TitleGlyphButton : Control
         this.glyph = glyph;
         DoubleBuffered = true;
         Cursor = Cursors.Hand;
+        SetStyle(ControlStyles.Selectable, true);
+        A11y.Button(this, glyph switch
+        {
+            "min" => "Minimize",
+            "max" => "Maximize",
+            "close" => "Close",
+            _ => "Window button"
+        });
     }
 
     protected override void OnMouseEnter(EventArgs e)
@@ -1975,6 +2131,12 @@ internal sealed class TitleGlyphButton : Control
         hover = false;
         Invalidate();
         base.OnMouseLeave(e);
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        A11y.InvokeOnEnterOrSpace(e, () => OnClick(EventArgs.Empty));
+        base.OnKeyDown(e);
     }
 
     protected override void OnPaint(PaintEventArgs e)
@@ -2008,6 +2170,14 @@ internal sealed class ToggleSwitch : Control
         this.on = on;
         DoubleBuffered = true;
         Cursor = Cursors.Hand;
+        SetStyle(ControlStyles.Selectable, true);
+        A11y.CheckBox(this, "Toggle");
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        A11y.InvokeOnEnterOrSpace(e, () => OnClick(EventArgs.Empty));
+        base.OnKeyDown(e);
     }
 
     protected override void OnPaint(PaintEventArgs e)
@@ -2405,6 +2575,7 @@ internal sealed class ApiConfig
     public int TrackOpacity { get; set; } = 30;
     public string? WarningColor { get; set; }
     public string? CriticalColor { get; set; }
+    [JsonIgnore]
     public string? ApiKey { get; set; }
     public string? SourceUrl { get; set; }
     public int PollSeconds { get; set; } = 300;
@@ -2697,6 +2868,12 @@ internal static class SelfTest
         };
         Check(PresetIconCatalog.Apply(configWithMissingIcon), "preset config apply changed");
         Check(configWithMissingIcon.Apis[0].LogoPath == PresetIcons.Anthropic && configWithMissingIcon.Apis[0].BrandColor == "#D97757", "preset config apply values");
+        var serializedSecret = JsonSerializer.Serialize(new TrayceConfig
+        {
+            Apis = new List<ApiConfig> { new() { Id = "secret", DisplayName = "Secret", ApiKey = "secret-value" } }
+        }, ConfigStore.JsonOptions);
+        Check(!serializedSecret.Contains("secret-value", StringComparison.OrdinalIgnoreCase) &&
+              !serializedSecret.Contains("apiKey", StringComparison.OrdinalIgnoreCase), "api key json exclusion");
         var customLogo = Path.Combine(AppContext.BaseDirectory, "assets", "trayce.svg");
         if (!File.Exists(customLogo)) customLogo = Path.Combine(Environment.CurrentDirectory, "assets", "trayce.svg");
         Check(File.Exists(customLogo), "custom logo fixture");

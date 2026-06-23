@@ -12,6 +12,8 @@ Trayce can show static usage from local config or refresh live JSON from each AP
 
 [Download latest build](https://github.com/Geijoh/Trayce/releases/latest) - [Privacy policy](PRIVACY.md)
 
+Release downloads include `Trayce-win-x64.zip` and a matching `Trayce-win-x64.zip.sha256` checksum.
+
 ## Creation Note
 
 Trayce was created with assistance from Claude Code, OpenAI Codex, and Claude Design. Project direction, review, and release decisions remain human-owned.
@@ -24,6 +26,7 @@ Runtime:
 - 64-bit Windows.
 - No separate .NET install is required for packaged releases; Trayce publishes as a self-contained app.
 - Settings are stored in `%APPDATA%\Trayce\apis.json`.
+- API keys are stored in Windows Credential Manager; the JSON config keeps metadata only.
 - Cached usage state is stored in `%LOCALAPPDATA%\Trayce\state.json`.
 - Optional: live usage endpoints that return Trayce-compatible JSON over HTTP or HTTPS.
 

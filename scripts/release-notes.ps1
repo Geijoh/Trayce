@@ -24,7 +24,8 @@ $lines = @(
     "",
     "## Package",
     "",
-    "- ``Trayce-win-x64.zip``"
+    "- ``Trayce-win-x64.zip``",
+    "- ``Trayce-win-x64.zip.sha256``"
 )
 
 if ($repo -and $previous) {

@@ -79,6 +79,23 @@ internal sealed class ToastForm : Form
     }
 }
 
+internal sealed class ClickablePanel : Panel
+{
+    public ClickablePanel(string accessibleName, string? accessibleDescription = null)
+    {
+        DoubleBuffered = true;
+        Cursor = Cursors.Hand;
+        SetStyle(ControlStyles.Selectable, true);
+        A11y.Button(this, accessibleName, accessibleDescription);
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        A11y.InvokeOnEnterOrSpace(e, () => OnClick(EventArgs.Empty));
+        base.OnKeyDown(e);
+    }
+}
+
 internal sealed class AboutForm : Form
 {
     private const string GitHubUrl = "https://github.com/Geijoh/Trayce";
@@ -192,7 +209,7 @@ internal sealed class LogoPickerForm : Form
             Font = UiFont.Px(12.5f)
         });
 
-        dropArea = new Panel { Location = new Point(20, 116), Size = new Size(400, 64), BackColor = UiPalette.Card, Cursor = Cursors.Hand, AllowDrop = true };
+        dropArea = new ClickablePanel("Browse logo image", "Choose a PNG, JPG, BMP, or ICO file") { Location = new Point(20, 116), Size = new Size(400, 64), BackColor = UiPalette.Card, AllowDrop = true };
         dropArea.Paint += PaintDrop;
         dropArea.Click += (_, _) => Browse();
         dropArea.DragEnter += OnDragEnter;
@@ -222,7 +239,7 @@ internal sealed class LogoPickerForm : Form
 
     private Control SampleRow(string name)
     {
-        var row = new Panel { Size = new Size(394, 33), Margin = new Padding(0, 0, 0, 5), Cursor = Cursors.Hand, BackColor = Color.Transparent };
+        var row = new ClickablePanel("Browse logo image", name) { Size = new Size(394, 33), Margin = new Padding(0, 0, 0, 5), BackColor = Color.Transparent };
         row.Click += (_, _) => Browse();
         row.Paint += (_, e) =>
         {
@@ -433,7 +450,7 @@ internal sealed class PresetPickerForm : Form
 
     private Control Card(ApiPreset preset, int index)
     {
-        var card = new Panel { Size = new Size(184, 56), Margin = new Padding(0, 0, index % 3 == 2 ? 0 : 8, 8), Cursor = Cursors.Hand, BackColor = Color.Transparent };
+        var card = new ClickablePanel(preset.Name, preset.Provider) { Size = new Size(184, 56), Margin = new Padding(0, 0, index % 3 == 2 ? 0 : 8, 8), BackColor = Color.Transparent };
         card.Click += (_, _) => { Preset = preset; DialogResult = DialogResult.OK; Close(); };
         card.Paint += (_, e) =>
         {

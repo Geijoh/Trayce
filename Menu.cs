@@ -43,6 +43,7 @@ internal sealed class TrayMenu : Form
         ClientSize = new Size(width, y + Dpi.Scale(this, 5));
         Deactivate += (_, _) => Close();
         KeyDown += (_, e) => { if (e.KeyCode == Keys.Escape) Close(); };
+        Shown += (_, _) => Controls.OfType<MenuItemRow>().OrderBy(row => row.Top).FirstOrDefault()?.Focus();
     }
 
     private int MeasureWidth(IReadOnlyList<Item> items)
@@ -110,11 +111,44 @@ internal sealed class MenuItemRow : Control
         this.item = item;
         DoubleBuffered = true;
         Cursor = Cursors.Hand;
+        SetStyle(ControlStyles.Selectable, true);
+        TabStop = true;
+        AccessibleRole = AccessibleRole.MenuItem;
+        AccessibleName = item.Label;
     }
 
     protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
     protected override void OnMouseLeave(EventArgs e) { hover = false; Invalidate(); base.OnMouseLeave(e); }
+    protected override void OnGotFocus(EventArgs e) { hover = true; Invalidate(); base.OnGotFocus(e); }
+    protected override void OnLostFocus(EventArgs e) { hover = false; Invalidate(); base.OnLostFocus(e); }
     protected override void OnClick(EventArgs e) { Invoked?.Invoke(); base.OnClick(e); }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        if (e.KeyCode is Keys.Enter or Keys.Space)
+        {
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+            Invoked?.Invoke();
+        }
+        else if (e.KeyCode is Keys.Up or Keys.Down)
+        {
+            FocusSibling(e.KeyCode == Keys.Down ? 1 : -1);
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+        }
+
+        base.OnKeyDown(e);
+    }
+
+    private void FocusSibling(int delta)
+    {
+        if (Parent is null) return;
+        var rows = Parent.Controls.OfType<MenuItemRow>().OrderBy(row => row.Top).ToList();
+        var index = rows.IndexOf(this);
+        if (index < 0 || rows.Count == 0) return;
+        rows[(index + delta + rows.Count) % rows.Count].Focus();
+    }
 
     protected override void OnPaint(PaintEventArgs e)
     {
