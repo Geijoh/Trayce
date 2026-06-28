@@ -569,6 +569,7 @@ internal sealed class ApiListItem : Control
     private bool selected;
     private bool hover;
     public string ApiId => api.Id;
+    public event Action<ApiListItem, Point>? ContextRequested;
 
     public ApiListItem(ApiConfig api, bool selected)
     {
@@ -596,8 +597,24 @@ internal sealed class ApiListItem : Control
 
     protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
     protected override void OnMouseLeave(EventArgs e) { hover = false; Invalidate(); base.OnMouseLeave(e); }
+    protected override void OnMouseDown(MouseEventArgs e)
+    {
+        base.OnMouseDown(e);
+        if (e.Button != MouseButtons.Right) return;
+        Focus();
+        ContextRequested?.Invoke(this, e.Location);
+    }
+
     protected override void OnKeyDown(KeyEventArgs e)
     {
+        if (e.KeyCode == Keys.Apps || (e.Shift && e.KeyCode == Keys.F10))
+        {
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+            ContextRequested?.Invoke(this, new Point(Width / 2, Height / 2));
+            return;
+        }
+
         A11y.InvokeOnEnterOrSpace(e, () => OnClick(EventArgs.Empty));
         base.OnKeyDown(e);
     }
@@ -1181,6 +1198,7 @@ internal sealed class SettingsForm : Form
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
             };
             item.Click += (_, _) => SelectApi(api.Id);
+            item.ContextRequested += (source, point) => ShowApiContextMenu(api, source, point);
             sidebarList.Controls.Add(item);
             y += S(56);
         }
@@ -1317,16 +1335,59 @@ internal sealed class SettingsForm : Form
 
     private void DeleteSelectedApi()
     {
+        DeleteApi(selectedId);
+    }
+
+    private void DeleteApi(string apiId)
+    {
         if (apis.Count <= 1) return;
-        var index = apis.FindIndex(api => string.Equals(api.Id, selectedId, StringComparison.OrdinalIgnoreCase));
+        var index = apis.FindIndex(api => string.Equals(api.Id, apiId, StringComparison.OrdinalIgnoreCase));
         if (index < 0) return;
 
+        var deletedSelected = string.Equals(selectedId, apiId, StringComparison.OrdinalIgnoreCase);
         apis.RemoveAt(index);
-        selectedId = apis[Math.Min(index, apis.Count - 1)].Id;
-        revealKey = false;
         MarkDirty();
         RenderSidebar();
+        if (!deletedSelected) return;
+
+        selectedId = apis[Math.Min(index, apis.Count - 1)].Id;
+        revealKey = false;
+        UpdateSidebarSelection();
         RenderEditor();
+    }
+
+    private void ShowApiContextMenu(ApiConfig api, Control source, Point point)
+    {
+        var menu = new ContextMenuStrip
+        {
+            ShowImageMargin = false,
+            BackColor = UiPalette.Menu,
+            ForeColor = UiPalette.Text,
+            Font = UiFont.Px(12.5f),
+            Padding = Padding.Empty
+        };
+        menu.Closed += (_, _) => menu.Dispose();
+
+        ToolStripMenuItem Item(string text, Action action)
+        {
+            var item = new ToolStripMenuItem(text);
+            item.Click += (_, _) => action();
+            menu.Items.Add(item);
+            return item;
+        }
+
+        Item("Open settings", () => SelectApi(api.Id));
+        Item("Choose logo...", () => ChooseLogo(api));
+        var match = Item("Match logo and color", () => ApplyPresetIcon(api));
+        match.Enabled = PresetIconCatalog.Find(api.DisplayName, api.SourceUrl).HasValue;
+        menu.Items.Add(new ToolStripSeparator());
+        Item("Open config JSON", () => new JsonPreviewForm(EditedConfig()).ShowDialog(this));
+        menu.Items.Add(new ToolStripSeparator());
+        var delete = Item("Delete API", () => DeleteApi(api.Id));
+        delete.Enabled = apis.Count > 1;
+        delete.ForeColor = apis.Count > 1 ? UiPalette.Crit : UiPalette.Text3;
+
+        menu.Show(source, point);
     }
 
     private void Section(string title, ref int y, int width, Control card)
@@ -1722,6 +1783,14 @@ internal sealed class SettingsForm : Form
         {
             MessageBox.Show(this, ex.Message, "Trayce", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    private void ApplyPresetIcon(ApiConfig api)
+    {
+        if (!PresetIconCatalog.Apply(api)) return;
+        MarkDirty();
+        RefreshSidebarRows();
+        if (string.Equals(selectedId, api.Id, StringComparison.OrdinalIgnoreCase)) RenderEditor();
     }
 
     private void ApplySmartIcon(ApiConfig api)
