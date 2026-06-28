@@ -566,8 +566,9 @@ internal sealed class PercentSlider : Control
 internal sealed class ApiListItem : Control
 {
     private readonly ApiConfig api;
-    private readonly bool selected;
+    private bool selected;
     private bool hover;
+    public string ApiId => api.Id;
 
     public ApiListItem(ApiConfig api, bool selected)
     {
@@ -578,6 +579,19 @@ internal sealed class ApiListItem : Control
         SetStyle(ControlStyles.Selectable, true);
         A11y.Button(this, api.DisplayName, "Select tracked API");
         Height = 52;
+    }
+
+    public void SetSelected(bool value)
+    {
+        if (selected == value) return;
+        selected = value;
+        Invalidate();
+    }
+
+    public void RefreshRow()
+    {
+        AccessibleName = api.DisplayName;
+        Invalidate();
     }
 
     protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
@@ -601,14 +615,15 @@ internal sealed class ApiListItem : Control
 
         if (selected || hover)
         {
-            using var back = new SolidBrush(UiPalette.ControlHover);
+            var rowBack = selected && !UiPalette.IsDark ? Color.FromArgb(0xdb, 0xec, 0xff) : UiPalette.ControlHover;
+            using var back = new SolidBrush(rowBack);
             UiPalette.FillRound(g, back, new Rectangle(0, 0, Width - 1, Height - 1), S(7));
         }
 
         if (selected)
         {
             using var accent = new SolidBrush(UiPalette.Accent);
-            UiPalette.FillRound(g, accent, new Rectangle(S(1), S(10), S(3), Height - S(20)), S(3));
+            UiPalette.FillRound(g, accent, new Rectangle(S(1), S(8), S(4), Height - S(16)), S(3));
         }
 
         var badgeSize = S(30);
@@ -657,7 +672,7 @@ internal sealed class ApiListItem : Control
 /// <summary>Sidebar item for app-wide settings defaults.</summary>
 internal sealed class GeneralListItem : Control
 {
-    private readonly bool selected;
+    private bool selected;
     private bool hover;
 
     public GeneralListItem(bool selected)
@@ -669,6 +684,15 @@ internal sealed class GeneralListItem : Control
         A11y.Button(this, "General", "Open app defaults");
         Height = 52;
     }
+
+    public void SetSelected(bool value)
+    {
+        if (selected == value) return;
+        selected = value;
+        Invalidate();
+    }
+
+    public void RefreshRow() => Invalidate();
 
     protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
     protected override void OnMouseLeave(EventArgs e) { hover = false; Invalidate(); base.OnMouseLeave(e); }
@@ -690,14 +714,15 @@ internal sealed class GeneralListItem : Control
 
         if (selected || hover)
         {
-            using var back = new SolidBrush(UiPalette.ControlHover);
+            var rowBack = selected && !UiPalette.IsDark ? Color.FromArgb(0xdb, 0xec, 0xff) : UiPalette.ControlHover;
+            using var back = new SolidBrush(rowBack);
             UiPalette.FillRound(g, back, new Rectangle(0, 0, Width - 1, Height - 1), S(7));
         }
 
         if (selected)
         {
             using var accent = new SolidBrush(UiPalette.Accent);
-            UiPalette.FillRound(g, accent, new Rectangle(S(1), S(10), S(3), Height - S(20)), S(3));
+            UiPalette.FillRound(g, accent, new Rectangle(S(1), S(8), S(4), Height - S(16)), S(3));
         }
 
         var chip = new Rectangle(S(11), (Height - S(30)) / 2, S(30), S(30));
@@ -824,6 +849,7 @@ internal sealed class SettingsForm : Form
     private Panel editor = new();
     private Panel footerPanel = new();
     private Label footerStatus = new();
+    private GeneralListItem? generalItem;
     private string selectedId;
     private ThemeMode themeMode;
     private bool autoApplyPresetIcons;
@@ -879,7 +905,6 @@ internal sealed class SettingsForm : Form
         Resize += (_, _) =>
         {
             if (WindowState == FormWindowState.Minimized) return;
-            RenderSidebar();
             RenderEditor();
         };
         Shown += (_, _) => ActiveControl = null;
@@ -1061,13 +1086,8 @@ internal sealed class SettingsForm : Form
             Size = Z(258, 52),
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
         };
-        general.Click += (_, _) =>
-        {
-            selectedId = GeneralId;
-            revealKey = false;
-            RenderSidebar();
-            RenderEditor();
-        };
+        generalItem = general;
+        general.Click += (_, _) => SelectGeneral();
         top.Controls.Add(general);
         top.Controls.Add(new Label
         {
@@ -1160,13 +1180,7 @@ internal sealed class SettingsForm : Form
                 Size = new Size(sidebarList.ClientSize.Width - S(16), S(52)),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
             };
-            item.Click += (_, _) =>
-            {
-                selectedId = api.Id;
-                revealKey = false;
-                RenderSidebar();
-                RenderEditor();
-            };
+            item.Click += (_, _) => SelectApi(api.Id);
             sidebarList.Controls.Add(item);
             y += S(56);
         }
@@ -1192,7 +1206,7 @@ internal sealed class SettingsForm : Form
             var width = Math.Max(S(560), editor.ClientSize.Width - S(48) - (editor.VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0));
             var y = S(20);
 
-            var nameField = TextField(api.DisplayName, v => { api.DisplayName = v; MarkDirty(); RenderSidebar(); }, 320);
+            var nameField = TextField(api.DisplayName, v => { api.DisplayName = v; MarkDirty(); RefreshSidebarRows(); }, 320);
             nameField.Box.Leave += (_, _) => ApplySmartIcon(api);
             var sourceField = TextField(api.SourceUrl ?? "", v => { api.SourceUrl = v; MarkDirty(); }, 430, mono: true, placeholder: "https://api.example.com/usage");
             sourceField.Box.Leave += (_, _) => ApplySmartIcon(api);
@@ -1225,7 +1239,10 @@ internal sealed class SettingsForm : Form
 
             var json = new RoundedButton("Open config JSON") { Glyph = "code", Bordered = false, Back = Color.Transparent, Foreground = UiPalette.Accent, GlyphColor = UiPalette.Accent, TextPx = 12.5f, Location = new Point(S(24), y), Size = Z(180, 26) };
             json.Click += (_, _) => new JsonPreviewForm(EditedConfig()).ShowDialog(this);
+            var delete = new RoundedButton("Delete API") { Glyph = "trash", Bordered = false, Back = Color.Transparent, Foreground = apis.Count > 1 ? UiPalette.Crit : UiPalette.Text3, GlyphColor = apis.Count > 1 ? UiPalette.Crit : UiPalette.Text3, TextPx = 12.5f, Location = new Point(S(210), y), Size = Z(128, 26), Enabled = apis.Count > 1 };
+            delete.Click += (_, _) => DeleteSelectedApi();
             editor.Controls.Add(json);
+            editor.Controls.Add(delete);
             y += S(56);
 
             editor.AutoScrollMinSize = new Size(0, y);
@@ -1262,6 +1279,54 @@ internal sealed class SettingsForm : Form
             ToggleRow("Start with Windows", "Launch Trayce automatically at sign-in", globalStartWithWindows, v => globalStartWithWindows = v)));
 
         editor.AutoScrollMinSize = new Size(0, y);
+    }
+
+    private void SelectGeneral()
+    {
+        if (string.Equals(selectedId, GeneralId, StringComparison.OrdinalIgnoreCase)) return;
+        selectedId = GeneralId;
+        revealKey = false;
+        UpdateSidebarSelection();
+        RenderEditor();
+    }
+
+    private void SelectApi(string id)
+    {
+        if (string.Equals(selectedId, id, StringComparison.OrdinalIgnoreCase)) return;
+        selectedId = id;
+        revealKey = false;
+        UpdateSidebarSelection();
+        RenderEditor();
+    }
+
+    private void UpdateSidebarSelection()
+    {
+        generalItem?.SetSelected(string.Equals(selectedId, GeneralId, StringComparison.OrdinalIgnoreCase));
+        foreach (var item in sidebarList.Controls.OfType<ApiListItem>())
+        {
+            item.SetSelected(string.Equals(item.ApiId, selectedId, StringComparison.OrdinalIgnoreCase));
+            item.RefreshRow();
+        }
+    }
+
+    private void RefreshSidebarRows()
+    {
+        generalItem?.RefreshRow();
+        foreach (var item in sidebarList.Controls.OfType<ApiListItem>()) item.RefreshRow();
+    }
+
+    private void DeleteSelectedApi()
+    {
+        if (apis.Count <= 1) return;
+        var index = apis.FindIndex(api => string.Equals(api.Id, selectedId, StringComparison.OrdinalIgnoreCase));
+        if (index < 0) return;
+
+        apis.RemoveAt(index);
+        selectedId = apis[Math.Min(index, apis.Count - 1)].Id;
+        revealKey = false;
+        MarkDirty();
+        RenderSidebar();
+        RenderEditor();
     }
 
     private void Section(string title, ref int y, int width, Control card)
@@ -1361,7 +1426,7 @@ internal sealed class SettingsForm : Form
     {
         var wrap = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = false, BackColor = Color.Transparent, Size = Z(330, 35) };
         wrap.Controls.Add(new LogoBadge(api) { Size = Z(34, 34), Radius = 8, Margin = G(0, 0, 10, 0) });
-        var initials = TextField(api.LogoText ?? Logo.Initials(api.DisplayName), v => { api.LogoText = v[..Math.Min(3, v.Length)]; MarkDirty(); RenderSidebar(); }, 54, centered: true);
+        var initials = TextField(api.LogoText ?? Logo.Initials(api.DisplayName), v => { api.LogoText = v[..Math.Min(3, v.Length)]; MarkDirty(); RefreshSidebarRows(); }, 54, centered: true);
         initials.Box.AccessibleName = "Logo initials";
         initials.Margin = G(0, 0, 10, 0);
         wrap.Controls.Add(initials);
@@ -1380,7 +1445,7 @@ internal sealed class SettingsForm : Form
             autoApplyPresetIcons = !autoApplyPresetIcons;
             if (autoApplyPresetIcons) PresetIconCatalog.Apply(new TrayceConfig { Apis = apis });
             MarkDirty();
-            RenderSidebar();
+            RefreshSidebarRows();
             RenderEditor();
         };
         return Row("Auto-match LobeHub icons", "Updates missing/default logos and colors", toggle);
@@ -1405,7 +1470,7 @@ internal sealed class SettingsForm : Form
             api.UseBrandColor = string.Equals(api.CustomColor, api.BrandColor, StringComparison.OrdinalIgnoreCase);
             MarkDirty();
             RenderEditor();
-            RenderSidebar();
+            RefreshSidebarRows();
         };
         return Row("Brand color", "Identity color", field);
     }
@@ -1419,7 +1484,7 @@ internal sealed class SettingsForm : Form
             set(!value);
             MarkDirty();
             RenderEditor();
-            RenderSidebar();
+            RefreshSidebarRows();
         };
         return Row(title, subtitle, toggle);
     }
@@ -1432,7 +1497,7 @@ internal sealed class SettingsForm : Form
         {
             api.RingMode = segment.SelectedIndex == 1 ? "primary" : "busiest";
             MarkDirty();
-            RenderSidebar();
+            RefreshSidebarRows();
         };
         return Row("Ring reflects", "Which limit drives the arc", segment);
     }
@@ -1444,7 +1509,7 @@ internal sealed class SettingsForm : Form
         {
             if (int.TryParse(v, out var n)) api.WarningThreshold = Math.Clamp(n, 1, Math.Max(1, api.CriticalThreshold - 1));
             MarkDirty();
-            RenderSidebar();
+            RefreshSidebarRows();
         }, 44, centered: true);
         warn.Box.AccessibleName = "Warning threshold";
         warn.Margin = G(0, 0, 5, 0);
@@ -1453,7 +1518,7 @@ internal sealed class SettingsForm : Form
         {
             if (int.TryParse(v, out var n)) api.CriticalThreshold = Math.Clamp(n, Math.Min(99, api.WarningThreshold + 1), 100);
             MarkDirty();
-            RenderSidebar();
+            RefreshSidebarRows();
         }, 44, centered: true);
         crit.Box.AccessibleName = "Critical threshold";
         crit.Margin = G(0, 0, 5, 0);
@@ -1476,7 +1541,7 @@ internal sealed class SettingsForm : Form
             set(picker.SelectedColor);
             MarkDirty();
             RenderEditor();
-            RenderSidebar();
+            RefreshSidebarRows();
         };
         return Row(title, subtitle, field, muted: !enabled);
     }
@@ -1521,7 +1586,7 @@ internal sealed class SettingsForm : Form
             if (int.TryParse(v, out var n)) api.PollSeconds = PollSeconds(Math.Max(1, n), PollParts(api.PollSeconds).Unit);
             seconds.Text = "= " + api.PollSeconds + " s";
             MarkDirty();
-            RenderSidebar();
+            RefreshSidebarRows();
         }, 66);
         num.Box.AccessibleName = "Poll cadence amount";
         num.Margin = G(0, 0, 9, 0);
@@ -1532,7 +1597,7 @@ internal sealed class SettingsForm : Form
             if (int.TryParse(num.Text, out var n)) api.PollSeconds = PollSeconds(Math.Max(1, n), units.Text);
             seconds.Text = "= " + api.PollSeconds + " s";
             MarkDirty();
-            RenderSidebar();
+            RefreshSidebarRows();
         };
         wrap.Controls.Add(num);
         wrap.Controls.Add(units);
@@ -1650,7 +1715,7 @@ internal sealed class SettingsForm : Form
             api.LogoPath = ConfigStore.ImportLogo(api.Id, dialog.SelectedPath);
             MarkDirty();
             RenderEditor();
-            RenderSidebar();
+            RefreshSidebarRows();
             Toaster.Show(this, "Logo updated");
         }
         catch (Exception ex)
@@ -1663,7 +1728,7 @@ internal sealed class SettingsForm : Form
     {
         if (!autoApplyPresetIcons || !PresetIconCatalog.Apply(api)) return;
         MarkDirty();
-        RenderSidebar();
+        RefreshSidebarRows();
         RenderEditor();
     }
 

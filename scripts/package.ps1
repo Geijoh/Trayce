@@ -20,6 +20,20 @@ function Stop-UnpackedTrayce {
     }
 }
 
+function Wait-UnpackedExeUnlocked {
+    for ($attempt = 1; $attempt -le 40; $attempt++) {
+        if (-not (Test-Path -LiteralPath $unpackedExe)) { return }
+        try {
+            $stream = [IO.File]::Open($unpackedExe, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+            $stream.Dispose()
+            return
+        }
+        catch {
+            Start-Sleep -Milliseconds 250
+        }
+    }
+}
+
 function Get-SignTool {
     if ($env:TRAYCE_SIGNTOOL -and (Test-Path -LiteralPath $env:TRAYCE_SIGNTOOL)) {
         return $env:TRAYCE_SIGNTOOL
@@ -91,6 +105,7 @@ try {
     New-Item -ItemType Directory -Force -Path $distDir | Out-Null
     if (Test-Path $unpackedDir) {
         Stop-UnpackedTrayce
+        Wait-UnpackedExeUnlocked
         Remove-Item -LiteralPath $unpackedDir -Recurse -Force
     }
     if (Test-Path $zipPath) {

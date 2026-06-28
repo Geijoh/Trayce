@@ -682,6 +682,8 @@ internal sealed class GlyphButton : Control
 
 internal static class IconPainter
 {
+    private static readonly Dictionary<(string Glyph, int Color, int Width, int Height), Bitmap> SvgCache = new();
+
     public static Bitmap Bitmap(string glyph, Color color)
     {
         var bmp = new Bitmap(18, 18);
@@ -703,16 +705,22 @@ internal static class IconPainter
     {
         var path = Path.Combine(AppContext.BaseDirectory, "assets", "fluentui", glyph + ".svg");
         if (!File.Exists(path)) return false;
+        var key = (glyph, color.ToArgb(), bounds.Width, bounds.Height);
 
         try
         {
-            var svg = File.ReadAllText(path).Replace("#212121", $"#{color.R:X2}{color.G:X2}{color.B:X2}");
-            using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(svg));
-            var doc = SvgDocument.Open<SvgDocument>(stream);
-            using var bmp = new Bitmap(bounds.Width, bounds.Height);
-            doc.Width = bounds.Width;
-            doc.Height = bounds.Height;
-            doc.Draw(bmp);
+            if (!SvgCache.TryGetValue(key, out var bmp))
+            {
+                var svg = File.ReadAllText(path).Replace("#212121", $"#{color.R:X2}{color.G:X2}{color.B:X2}");
+                using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(svg));
+                var doc = SvgDocument.Open<SvgDocument>(stream);
+                bmp = new Bitmap(bounds.Width, bounds.Height);
+                doc.Width = bounds.Width;
+                doc.Height = bounds.Height;
+                doc.Draw(bmp);
+                SvgCache[key] = bmp;
+            }
+
             g.DrawImage(bmp, bounds);
             return true;
         }
