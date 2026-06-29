@@ -346,7 +346,7 @@ internal sealed class SelectBox : Control
             Font = UiFont.Px(12.5f),
             Padding = Padding.Empty
         };
-        menu.Closed += (_, _) => menu.Dispose();
+        menu.Closed += (_, _) => BeginInvoke(new Action(menu.Dispose));
         for (var i = 0; i < options.Length; i++)
         {
             var index = i;
@@ -1366,7 +1366,7 @@ internal sealed class SettingsForm : Form
             Font = UiFont.Px(12.5f),
             Padding = Padding.Empty
         };
-        menu.Closed += (_, _) => menu.Dispose();
+        menu.Closed += (_, _) => BeginInvoke(new Action(menu.Dispose));
 
         ToolStripMenuItem Item(string text, Action action)
         {
