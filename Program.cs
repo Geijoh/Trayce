@@ -2171,7 +2171,18 @@ internal sealed class TitleGlyphButton : Control
 
 internal sealed class ToggleSwitch : Control
 {
-    private readonly bool on;
+    private bool on;
+
+    public bool On
+    {
+        get => on;
+        set
+        {
+            if (on == value) return;
+            on = value;
+            Invalidate();
+        }
+    }
 
     public ToggleSwitch(bool on)
     {
@@ -2193,13 +2204,13 @@ internal sealed class ToggleSwitch : Control
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
         e.Graphics.Clear(UiPalette.Backdrop(this, UiPalette.Card));
         var rect = new Rectangle(0, 0, Width - 1, Height - 1);
-        using var back = new SolidBrush(on ? UiPalette.Accent2 : Color.Transparent);
-        using var border = new Pen(on ? UiPalette.Accent2 : UiPalette.Text2);
+        using var back = new SolidBrush(On ? UiPalette.Accent2 : Color.Transparent);
+        using var border = new Pen(On ? UiPalette.Accent2 : UiPalette.Text2);
         UiPalette.FillRound(e.Graphics, back, rect, Height / 2);
         UiPalette.DrawRound(e.Graphics, border, rect, Height / 2);
-        using var knob = new SolidBrush(on ? Color.White : UiPalette.Text2);
+        using var knob = new SolidBrush(On ? Color.White : UiPalette.Text2);
         var d = Dpi.Scale(this, 13);
-        var x = on ? Width - d - Dpi.Scale(this, 4) : Dpi.Scale(this, 4);
+        var x = On ? Width - d - Dpi.Scale(this, 4) : Dpi.Scale(this, 4);
         e.Graphics.FillEllipse(knob, x, (Height - d) / 2, d, d);
     }
 }
@@ -2843,6 +2854,8 @@ internal static class SelfTest
         {
             Check(path.GetBounds().Height <= 7.1f, "rounded path clamps radius");
         }
+        UiPalette.Apply(ThemeMode.Light);
+        Check(!UiPalette.Apply(ThemeMode.Light), "same theme skips palette repaint");
 
         using var icon = IconRenderer.Render(api, usage, stale: false);
         Check(icon.Width > 0 && icon.Height > 0, "icon");

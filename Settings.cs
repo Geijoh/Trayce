@@ -181,6 +181,15 @@ internal sealed class SegmentedToggle : Control
         Width = options.Length * 56;
     }
 
+    public void SetState(int selected, bool disabled)
+    {
+        var next = Math.Clamp(selected, 0, options.Length - 1);
+        if (SelectedIndex == next && Disabled == disabled) return;
+        SelectedIndex = next;
+        Disabled = disabled;
+        Invalidate();
+    }
+
     protected override void OnMouseDown(MouseEventArgs e)
     {
         if (!Disabled)
@@ -867,6 +876,8 @@ internal sealed class SettingsForm : Form
     private Panel footerPanel = new();
     private Label footerStatus = new();
     private GeneralListItem? generalItem;
+    private SegmentedToggle? titleThemeSegment;
+    private ToggleSwitch? titleMatchToggle;
     private string selectedId;
     private ThemeMode themeMode;
     private bool autoApplyPresetIcons;
@@ -903,6 +914,7 @@ internal sealed class SettingsForm : Form
         MinimumSize = new Size(S(980), S(620));
         ClientSize = new Size(1120, 740);
         BackColor = UiPalette.Bg;
+        DoubleBuffered = true;
         Font = UiFont.Px(13f);
         KeyPreview = true;
 
@@ -1048,8 +1060,10 @@ internal sealed class SettingsForm : Form
         // theme cluster (mirrors the prototype's floating Light/Dark toggle + a Match-system switch)
         var matchOn = UiPalette.Mode == ThemeMode.System;
         var segment = new SegmentedToggle(new[] { "Light", "Dark" }, UiPalette.IsDark ? 1 : 0) { Disabled = matchOn, Size = Z(112, 26) };
+        titleThemeSegment = segment;
         segment.SelectionChanged += (_, _) => ApplyTheme(segment.SelectedIndex == 0 ? ThemeMode.Light : ThemeMode.Dark);
         var matchToggle = new ToggleSwitch(matchOn) { Size = Z(34, 18) };
+        titleMatchToggle = matchToggle;
         matchToggle.Click += (_, _) => ApplyTheme(UiPalette.Mode == ThemeMode.System ? (UiPalette.IsDark ? ThemeMode.Dark : ThemeMode.Light) : ThemeMode.System);
         var matchLabel = new Label { AutoSize = false, Text = "Match system", TextAlign = ContentAlignment.MiddleRight, ForeColor = UiPalette.Text2, Font = UiFont.Px(11.5f), Size = Z(104, 42) };
         var about = new RoundedButton("About") { Glyph = "info", Size = Z(84, 28), TextPx = 12f, Back = UiPalette.Control, Foreground = UiPalette.Text2, BorderColor = UiPalette.Border2 };
@@ -1088,7 +1102,15 @@ internal sealed class SettingsForm : Form
     {
         themeMode = mode;
         ConfigStore.SaveTheme(mode);
-        UiPalette.Apply(mode); // fires UiPalette.Changed -> OnThemeChanged rebuilds the window
+        if (UiPalette.Apply(mode)) return; // palette changed; UiPalette.Changed rebuilds themed surfaces.
+        RefreshTitleThemeControls();
+        if (string.Equals(selectedId, GeneralId, StringComparison.OrdinalIgnoreCase)) RenderEditor();
+    }
+
+    private void RefreshTitleThemeControls()
+    {
+        titleThemeSegment?.SetState(UiPalette.IsDark ? 1 : 0, UiPalette.Mode == ThemeMode.System);
+        if (titleMatchToggle is not null) titleMatchToggle.On = UiPalette.Mode == ThemeMode.System;
     }
 
     private Control BuildSidebar()
@@ -1239,10 +1261,10 @@ internal sealed class SettingsForm : Form
                 ToggleRow("Status dot", "Flag stale data and fetch errors", api.ShowStatusDot, v => api.ShowStatusDot = v),
                 RingReflectsRow(api),
                 ThresholdRow(api),
-                ToggleRow("Tray backer", "Match the system theme", api.MatchSystemBacker, v => api.MatchSystemBacker = v),
+                ToggleRow("Tray backer", "Match the system theme", api.MatchSystemBacker, v => api.MatchSystemBacker = v, rerender: true),
                 ColorSettingRow("Backer color", null, BackerColor(api), v => api.BackerColor = v, !api.MatchSystemBacker),
                 SliderRow("Backer opacity", null, api.BackerOpacity, v => api.BackerOpacity = v, !api.MatchSystemBacker),
-                ToggleRow("Ring track", "Match the ring color", api.TrackMatchesRing, v => api.TrackMatchesRing = v),
+                ToggleRow("Ring track", "Match the ring color", api.TrackMatchesRing, v => api.TrackMatchesRing = v, rerender: true),
                 ColorSettingRow("Track color", null, TrackColor(api), v => api.TrackColor = v, !api.TrackMatchesRing),
                 SliderRow("Track opacity", null, api.TrackOpacity, v => api.TrackOpacity = v, true),
                 ColorSettingRow("Warning color", "Ring at 70-90%", WarningColor(api), v => api.WarningColor = v, true),
@@ -1536,15 +1558,18 @@ internal sealed class SettingsForm : Form
         return Row("Brand color", "Identity color", field);
     }
 
-    private Control ToggleRow(string title, string? subtitle, bool value, Action<bool> set)
+    private Control ToggleRow(string title, string? subtitle, bool value, Action<bool> set, bool rerender = false)
     {
+        var current = value;
         var toggle = new ToggleSwitch(value) { Size = Z(40, 21) };
         A11y.CheckBox(toggle, title, subtitle);
         toggle.Click += (_, _) =>
         {
-            set(!value);
+            current = !current;
+            toggle.On = current;
+            set(current);
             MarkDirty();
-            RenderEditor();
+            if (rerender) RenderEditor();
             RefreshSidebarRows();
         };
         return Row(title, subtitle, toggle);

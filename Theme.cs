@@ -138,12 +138,15 @@ internal static class UiPalette
     /// <summary>Raised after the active theme changes so live windows can repaint/rebuild.</summary>
     public static event Action? Changed;
 
-    public static void Apply(ThemeMode mode)
+    public static bool Apply(ThemeMode mode)
     {
+        var nextDark = mode == ThemeMode.Dark || (mode == ThemeMode.System && SystemTheme.IsDark());
+        var changed = IsDark != nextDark;
         Mode = mode;
-        IsDark = mode == ThemeMode.Dark || (mode == ThemeMode.System && SystemTheme.IsDark());
+        IsDark = nextDark;
         current = IsDark ? ThemePalette.Dark : ThemePalette.Light;
-        Changed?.Invoke();
+        if (changed) Changed?.Invoke();
+        return changed;
     }
 
     public static Color Bg => current.Bg;
