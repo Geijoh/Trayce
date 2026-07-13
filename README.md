@@ -4,6 +4,8 @@
 
 ![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/Geijoh/Trayce/total)
 
+<a href="https://www.buymeacoffee.com/thestarduster" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174"></a>
+
 Lightweight Windows tray utility for watching API usage at a glance.
 
 Current build: self-contained .NET 8 Windows tray app with one usage ring per configured API, custom brand/logo marks in the details surfaces, automatic bundled logo matching, stacked usage windows, light/dark themes, and per-monitor DPI-aware rendering.
